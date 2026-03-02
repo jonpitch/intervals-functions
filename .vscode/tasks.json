@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "go: build workspace",
+      "type": "shell",
+      "command": "go build -o ${workspaceFolder}/bin ./...",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$go"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "showReuseMessage": false
+      }
+    }
+  ]
+}
