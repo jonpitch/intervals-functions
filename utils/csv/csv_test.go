@@ -41,9 +41,9 @@ func TestParseDailyTotals_SomeColumnsZero(t *testing.T) {
 
 	totals, err := ParseCronometerDailyTotals(csvData)
 	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.Equal(t, 100, *totals.Kcal)
+	assert.Equal(t, 100.0, *totals.Kcal)
 	assert.Nil(t, totals.Carbs)
-	assert.Equal(t, 301, *totals.Protein)
+	assert.Equal(t, 301.0, *totals.Protein)
 	assert.Nil(t, totals.Fat)
 }
 
@@ -53,8 +53,8 @@ func TestParseDailyTotals_AllColumns(t *testing.T) {
 
 	totals, err := ParseCronometerDailyTotals(csvData)
 	assert.NoError(t, err, "expected no error, got %v", err)
-	assert.Equal(t, 100, *totals.Kcal)
-	assert.Equal(t, 200, *totals.Carbs)
-	assert.Equal(t, 301, *totals.Protein)
-	assert.Equal(t, 401, *totals.Fat)
+	assert.Equal(t, 100.0, *totals.Kcal)
+	assert.Equal(t, 200.0, *totals.Carbs)
+	assert.Equal(t, 301.0, *totals.Protein)
+	assert.Equal(t, 401.0, *totals.Fat)
 }

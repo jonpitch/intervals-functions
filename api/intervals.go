@@ -25,11 +25,13 @@ func NewIntervalsClient(url string, apiKey string, athleteID string) IntervalsCl
 type WellnessRecordID string
 
 type WellnessRecord struct {
-	ID            WellnessRecordID `json:"id"`
-	KCalConsumed  int              `json:"kcalConsumed"`
-	Carbohydrates int              `json:"carbohydrates"`
-	Protein       int              `json:"protein"`
-	Fat           int              `json:"fatTotal"`
+	ID               WellnessRecordID `json:"id"`
+	KCalConsumed     *float64         `json:"kcalConsumed"`
+	Carbohydrates    *float64         `json:"carbohydrates"`
+	Protein          *float64         `json:"protein"`
+	Fat              *float64         `json:"fatTotal"`
+	OxygenSaturation *float64         `json:"spO2"`
+	Respiration      *float64         `json:"respiration"`
 }
 
 // GetWellnessRecord sends a GET request to

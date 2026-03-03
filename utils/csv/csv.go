@@ -9,10 +9,10 @@ import (
 )
 
 type CronometerDailyTotals struct {
-	Kcal    *int
-	Carbs   *int
-	Protein *int
-	Fat     *int
+	Kcal    *float64
+	Carbs   *float64
+	Protein *float64
+	Fat     *float64
 }
 
 const (
@@ -63,7 +63,7 @@ func ParseCronometerDailyTotals(csvData string) (*CronometerDailyTotals, error) 
 		return nil, err
 	}
 
-	parse := func(idx int) (*int, error) {
+	parse := func(idx int) (*float64, error) {
 		if idx >= len(row) {
 			return nil, fmt.Errorf("index %d out of range", idx)
 		}
@@ -71,8 +71,8 @@ func ParseCronometerDailyTotals(csvData string) (*CronometerDailyTotals, error) 
 			return nil, nil
 		}
 		val, err := strconv.ParseFloat(row[idx], 64)
-		asInt := int(math.Round(val))
-		return &asInt, err
+		round := math.Round(val)
+		return &round, err
 	}
 
 	kcal, err := parse(kcalIdx)
