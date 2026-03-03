@@ -3,6 +3,7 @@ package intervals
 import (
 	"encoding/base64"
 	"encoding/json"
+	"intervals-functions/utils/ptr"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,10 +30,10 @@ func TestGetWellnessRecord(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(WellnessRecord{
 			ID:            WellnessRecordID("888"),
-			KCalConsumed:  1,
-			Protein:       2,
-			Carbohydrates: 3,
-			Fat:           4,
+			KCalConsumed:  ptr.Float(1.0),
+			Protein:       ptr.Float(2.0),
+			Carbohydrates: ptr.Float(3.0),
+			Fat:           ptr.Float(4.0),
 		})
 	}))
 	defer server.Close()
@@ -50,10 +51,10 @@ func TestGetWellnessRecord(t *testing.T) {
 	assert.Equal(t, "Basic "+auth, ExpectedAuth)
 	assert.Equal(t, WellnessRecord{
 		ID:            WellnessRecordID("888"),
-		KCalConsumed:  1,
-		Protein:       2,
-		Carbohydrates: 3,
-		Fat:           4,
+		KCalConsumed:  ptr.Float(1.0),
+		Protein:       ptr.Float(2.0),
+		Carbohydrates: ptr.Float(3.0),
+		Fat:           ptr.Float(4.0),
 	}, body)
 }
 
@@ -78,10 +79,10 @@ func TestUpdateWellnessRecord(t *testing.T) {
 
 	wellness := WellnessRecord{
 		ID:            WellnessRecordID("666"),
-		KCalConsumed:  100,
-		Carbohydrates: 200,
-		Protein:       300,
-		Fat:           400,
+		KCalConsumed:  ptr.Float(100.0),
+		Carbohydrates: ptr.Float(200.0),
+		Protein:       ptr.Float(300.0),
+		Fat:           ptr.Float(400.0),
 	}
 
 	athleteID := "i1234"
