@@ -23,7 +23,7 @@ type DateRange struct {
 
 func main() {
 	// TODO use an environment agnostic approach in order to convert this to a lambda
-	err := godotenv.Load("../.env")
+	err := godotenv.Load("../../.env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// gocronometer doesn't provide a parser for nutrition data. gocronometer.ParseServingsExport is close
-	fmt.Printf("getting cronomoter daily totals for %v...\n", dateRange.Start.Format("2006-01-02"))
+	fmt.Printf("parsing cronomoter daily totals for %v...\n", dateRange.Start.Format("2006-01-02"))
 	totals, err := csv.ParseCronometerDailyTotals(rawNutritionCSV)
 	if err != nil {
 		log.Fatalf("failed to parse daily totals: %v", err)

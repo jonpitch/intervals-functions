@@ -2,10 +2,30 @@
 
 functions to sync data from 3rd party sources to [intervals.icu](https://intervals.icu/) that aren't natively supported
 
+# running
+
+add your cronometer and intervals credentials 
+```
+cp .env.example .env
+# update .env accordingly
+```
+
+update the intervals wellness record for yesterday:
+```
+go run cmd/cronometer.go
+```
+
+backfill wellness records:
+```
+cd cmd/backfill
+go run backfill.go fromDate toDate // dates are in YYYY-MM-DD format
+```
+
 # testing
 
-`go test`
+`go test ./...`
 
 # notes
 
 - [gocronometer](https://github.com/jrmycanady/gocronometer) doesn't work with 2FA
+- running `backfill` with large date ranges can lead to throttling from cronometer
