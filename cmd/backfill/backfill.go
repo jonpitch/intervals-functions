@@ -5,6 +5,7 @@ import (
 	"fmt"
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/csv"
+	"intervals-functions/utils/format"
 	"log"
 	"os"
 	"time"
@@ -12,11 +13,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/jrmycanady/gocronometer"
 )
-
-type DateRange struct {
-	Start time.Time
-	End   time.Time
-}
 
 // Backfill intervals with cronometer data. meant to be used as a one-off.
 //
@@ -84,7 +80,13 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("daily totals: %.1fk %.1fc %.1fp %.1ff\n", *totals.Kcal, *totals.Carbs, *totals.Protein, *totals.Fat)
+		fmt.Printf(
+			"daily totals: %sk %sc %sp %sf\n",
+			format.FloatPtr(totals.Kcal),
+			format.FloatPtr(totals.Carbs),
+			format.FloatPtr(totals.Protein),
+			format.FloatPtr(totals.Fat),
+		)
 
 		fmt.Println("get intervals wellness record...")
 		intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, intervalsApiKey, intervalsAthleteID)

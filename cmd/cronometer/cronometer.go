@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/calc"
 	"intervals-functions/utils/csv"
+	"intervals-functions/utils/format"
 	"intervals-functions/utils/ptr"
 	"log"
 	"os"
@@ -14,6 +16,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/jrmycanady/gocronometer"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
 type DateRange struct {
@@ -22,27 +27,39 @@ type DateRange struct {
 }
 
 func main() {
-	// TODO use an environment agnostic approach in order to convert this to a lambda
-	err := godotenv.Load("../../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	isNetlify := os.Getenv("NETLIFY")
+	if isNetlify == "true" {
+		lambda.Start(handler)
+	} else {
+		err := godotenv.Load("../../.env")
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
 
+		_, err = cronometerToIntervals()
+		if err != nil {
+			log.Fatalf("an error occurred: %v", err)
+		}
+	}
+}
+
+// extract yesterday's nutrition data from cronometer and update yesterday's wellness record in intervals
+func cronometerToIntervals() (int, error) {
 	username := os.Getenv("CRONOMETER_USERNAME")
 	password := os.Getenv("CRONOMETER_PASSWORD")
 	if username == "" || password == "" {
-		log.Fatal("CRONOMETER_USERNAME or CRONOMETER_PASSWORD is not set")
+		return 500, errors.New("CRONOMETER_USERNAME or CRONOMETER_PASSWORD is not set")
 	}
 
 	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
 	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
 	if intervalsAthleteID == "" || intervalsApiKey == "" {
-		log.Fatal("INTERVALS_ATHLETE_ID or INTERVALS_API_KEY is not set")
+		return 500, errors.New("INTERVALS_ATHLETE_ID or INTERVALS_API_KEY is not set")
 	}
 
 	cronometer := gocronometer.NewClient(nil)
 	if err := cronometer.Login(context.Background(), username, password); err != nil {
-		log.Fatalf("failed to login: %v", err)
+		return 500, err
 	}
 
 	// get nutrition info for yesterday
@@ -50,17 +67,23 @@ func main() {
 	dateRange := getYesterdayDateRange(now)
 	rawNutritionCSV, err := cronometer.ExportDailyNutrition(context.Background(), dateRange.Start, dateRange.End)
 	if err != nil {
-		log.Fatalf("failed to retrieve daily nutrition data: %v", err)
+		return 500, err
 	}
 
 	// gocronometer doesn't provide a parser for nutrition data. gocronometer.ParseServingsExport is close
 	fmt.Printf("parsing cronomoter daily totals for %v...\n", dateRange.Start.Format("2006-01-02"))
 	totals, err := csv.ParseCronometerDailyTotals(rawNutritionCSV)
 	if err != nil {
-		log.Fatalf("failed to parse daily totals: %v", err)
+		return 500, err
 	}
 
-	fmt.Printf("daily totals: %.1fk %.1fc %.1fp %.1ff\n", *totals.Kcal, *totals.Carbs, *totals.Protein, *totals.Fat)
+	fmt.Printf(
+		"daily totals: %sk %sc %sp %sf\n",
+		format.FloatPtr(totals.Kcal),
+		format.FloatPtr(totals.Carbs),
+		format.FloatPtr(totals.Protein),
+		format.FloatPtr(totals.Fat),
+	)
 
 	// get biometrics info for yesterday
 	// NOTE: intervals.icu garmin sync does not include oxygen saturation or respiration rate.
@@ -68,12 +91,12 @@ func main() {
 	// this will be removed if intervals.icu adds support for spo2 or respiration in its native sync.
 	rawBiometrics, err := cronometer.ExportBiometrics(context.Background(), dateRange.Start, dateRange.End)
 	if err != nil {
-		log.Fatalf("failed to retrieve biometrics data: %v", err)
+		return 500, err
 	}
 
 	biometrics, err := gocronometer.ParseBiometricRecordsExport(strings.NewReader(rawBiometrics), nil)
 	if err != nil {
-		log.Fatalf("failed to parse biometrics: %v", err)
+		return 500, err
 	}
 
 	spo2 := []float64{}
@@ -98,7 +121,7 @@ func main() {
 	intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, intervalsApiKey, intervalsAthleteID)
 	wellness, err := intervalsClient.GetWellnessRecord(dateRange.Start)
 	if err != nil {
-		log.Fatalf("failed to get wellness record: %v", err)
+		return 500, err
 	}
 
 	fmt.Println("updating intervals wellness record...")
@@ -113,10 +136,19 @@ func main() {
 	})
 
 	if err != nil {
-		log.Fatalf("failed to update wellness record: %v", err)
+		return 500, err
 	}
 
-	fmt.Println("done")
+	return 200, nil
+}
+
+// lambda function handler
+func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	status, err := cronometerToIntervals()
+	return events.APIGatewayProxyResponse{
+		StatusCode: status,
+		Body:       "done",
+	}, err
 }
 
 // get the start and end of the day for the previous day
