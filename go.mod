@@ -3,6 +3,7 @@ module intervals-functions
 go 1.24.0
 
 require (
+	github.com/aws/aws-lambda-go v1.53.0
 	github.com/joho/godotenv v1.5.1
 	github.com/jrmycanady/gocronometer v1.5.1
 )
