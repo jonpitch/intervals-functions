@@ -3,3 +3,5 @@
   functions = "functions"
 [build.environment]
   GO_IMPORT_PATH = "github.com/jonpitch/intervals-functions"
+[functions."cronometer"]
+  schedule = "@daily"

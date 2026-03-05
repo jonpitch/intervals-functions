@@ -43,6 +43,15 @@ func main() {
 	}
 }
 
+// lambda function handler
+func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	status, err := cronometerToIntervals()
+	return events.APIGatewayProxyResponse{
+		StatusCode: status,
+		Body:       "done",
+	}, err
+}
+
 // extract yesterday's nutrition data from cronometer and update yesterday's wellness record in intervals
 func cronometerToIntervals() (int, error) {
 	username := os.Getenv("CRONOMETER_USERNAME")
@@ -140,15 +149,6 @@ func cronometerToIntervals() (int, error) {
 	}
 
 	return 200, nil
-}
-
-// lambda function handler
-func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	status, err := cronometerToIntervals()
-	return events.APIGatewayProxyResponse{
-		StatusCode: status,
-		Body:       "done",
-	}, err
 }
 
 // get the start and end of the day for the previous day
