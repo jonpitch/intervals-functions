@@ -27,10 +27,9 @@ type DateRange struct {
 }
 
 func main() {
-	isNetlify := os.Getenv("NETLIFY")
-	if isNetlify == "true" {
-		lambda.Start(handler)
-	} else {
+	_, found := os.LookupEnv("NETLIFY")
+	if !found {
+		fmt.Println("not netlify environment, loading .env")
 		err := godotenv.Load("../../.env")
 		if err != nil {
 			log.Fatal("Error loading .env file")
@@ -40,6 +39,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("an error occurred: %v", err)
 		}
+	} else {
+		lambda.Start(handler)
 	}
 }
 
