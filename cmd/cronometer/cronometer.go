@@ -27,7 +27,7 @@ type DateRange struct {
 }
 
 func main() {
-	_, found := os.LookupEnv("NETLIFY")
+	_, found := os.LookupEnv("IS_NETLIFY")
 	if !found {
 		fmt.Println("not netlify environment, loading .env")
 		err := godotenv.Load("../../.env")
