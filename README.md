@@ -30,3 +30,4 @@ go run backfill.go fromDate toDate // dates are in YYYY-MM-DD format
 - [gocronometer](https://github.com/jrmycanady/gocronometer) doesn't work with 2FA
 - running `backfill` with large date ranges can lead to throttling from cronometer
 - `NETLIFY` as an environment variable is not available at runtime, only [these](https://docs.netlify.com/build/functions/environment-variables/#functions) are
+- netlify functions run in UTC time
