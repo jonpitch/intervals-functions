@@ -32,10 +32,24 @@ type WellnessRecord struct {
 	Fat              *float64         `json:"fatTotal"`
 	OxygenSaturation *float64         `json:"spO2"`
 	Respiration      *float64         `json:"respiration"`
+	Stress           *StressLevel     `json:"stress"`
 	// custom attributes
-	BodyBatteryMin *int `json:"BodyBatteryMin"`
-	BodyBatterMax  *int `json:"BodyBatteryMax"`
+	BodyBatteryMin      *int `json:"BodyBatteryMin"`
+	BodyBatterMax       *int `json:"BodyBatteryMax"`
+	RestStressSeconds   *int `json:"StressRestSeconds"`
+	LowStressSeconds    *int `json:"StressLowSeconds"`
+	MediumStressSeconds *int `json:"StressMediumSeconds"`
+	HighStressSeconds   *int `json:"StressHighSeconds"`
 }
+
+type StressLevel int
+
+const (
+	LowStress     StressLevel = 1
+	AvgStress     StressLevel = 2
+	HighStress    StressLevel = 3
+	ExtremeStress StressLevel = 4
+)
 
 // GetWellnessRecord sends a GET request to
 //

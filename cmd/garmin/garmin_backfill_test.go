@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	intervals "intervals-functions/api"
 	"testing"
 	"time"
 
@@ -85,4 +86,27 @@ func TestGarminUrls(t *testing.T) {
 	assert.Equal(t, []string{
 		fmt.Sprintf("%s%s/2026-01-01/2026-01-15", GarminAPI, SleepURL),
 	}, urls)
+}
+
+func TestGarminStressToIntervalsStress(t *testing.T) {
+	cases := []struct {
+		Garmin   int
+		Expected intervals.StressLevel
+	}{
+		{Garmin: -1, Expected: intervals.LowStress},
+		{Garmin: 0, Expected: intervals.LowStress},
+		{Garmin: 25, Expected: intervals.LowStress},
+		{Garmin: 26, Expected: intervals.AvgStress},
+		{Garmin: 50, Expected: intervals.AvgStress},
+		{Garmin: 51, Expected: intervals.HighStress},
+		{Garmin: 75, Expected: intervals.HighStress},
+		{Garmin: 76, Expected: intervals.ExtremeStress},
+		{Garmin: 100, Expected: intervals.ExtremeStress},
+		{Garmin: 101, Expected: intervals.ExtremeStress},
+	}
+
+	for _, c := range cases {
+		result := garmingStressToIntervalsStress(c.Garmin)
+		assert.Equal(t, c.Expected, result)
+	}
 }

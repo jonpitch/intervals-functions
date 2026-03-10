@@ -58,11 +58,11 @@ type StressEntry struct {
 }
 
 type StressValue struct {
-	HighStressDuration   int `json:"highStressDuration"`
-	LowStressDuration    int `json:"lowStressDuration"`
-	OverallStressLevel   int `json:"overallStressLevel"`
-	RestStressDuration   int `json:"restStressDuration"`
-	MediumStressDuration int `json:"mediumStressDuration"`
+	HighStressDurationSeconds   int `json:"highStressDuration"`
+	LowStressDurationSeconds    int `json:"lowStressDuration"`
+	OverallStressLevel          int `json:"overallStressLevel"`
+	RestStressDurationSeconds   int `json:"restStressDuration"`
+	MediumStressDurationSeconds int `json:"mediumStressDuration"`
 }
 
 type BodyBatteryEntry struct {
@@ -160,14 +160,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	records, err = getStressData(csrf, cookie, fromDateStr, toDateStr, records)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// TODO weight - needs some thought. there's min/max, latest weight. weights appear to be in grams?
 
 	// some of these attributes require custom wellness attributes
 	// TODO sleep
-
-	// these aren't natively kept in sync by intervals.icu
-	// TODO stress
-	// note: spo2 has no 4 week view
 
 	// collect wellness records to bulk update
 	var wellness []intervals.WellnessRecord
@@ -182,6 +183,83 @@ func main() {
 	}
 
 	log.Println("done")
+}
+
+// garmingStressToIntervalsStress maps a numerical garmin overall stress score to an intervals stress value
+func garmingStressToIntervalsStress(stress int) intervals.StressLevel {
+	if stress <= 25 {
+		return intervals.LowStress
+	} else if stress > 25 && stress <= 50 {
+		return intervals.AvgStress
+	} else if stress > 50 && stress <= 75 {
+		return intervals.HighStress
+	} else {
+		return intervals.ExtremeStress
+	}
+}
+
+func getStressData(
+	csrf string,
+	cookie string,
+	fromDateStr string,
+	toDateStr string,
+	records map[GarminDate]intervals.WellnessRecord,
+) (map[GarminDate]intervals.WellnessRecord, error) {
+	urls, err := buildGarminURLs(StressURL, fromDateStr, toDateStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var request *http.Request
+	client := &http.Client{}
+	for _, url := range urls {
+		log.Printf("[stress] fetching %s...\n", url)
+		request, err = http.NewRequest("GET", url, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		request.Header.Set("connect-csrf-token", csrf)
+		request.Header.Set("cookie", cookie)
+		resp, err := client.Do(request)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+		bodyText, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var stress []StressEntry
+		err = json.Unmarshal(bodyText, &stress)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, b := range stress {
+			if _, exists := records[b.Date]; exists {
+				record := records[b.Date]
+				record.LowStressSeconds = ptr.Int(b.Value.LowStressDurationSeconds)
+				record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
+				record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
+				record.RestStressSeconds = ptr.Int(b.Value.RestStressDurationSeconds)
+				record.Stress = ptr.StressLevel(garmingStressToIntervalsStress(b.Value.OverallStressLevel))
+				records[b.Date] = record
+			} else {
+				records[b.Date] = intervals.WellnessRecord{
+					ID:                  intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
+					LowStressSeconds:    ptr.Int(b.Value.LowStressDurationSeconds),
+					MediumStressSeconds: ptr.Int(b.Value.MediumStressDurationSeconds),
+					HighStressSeconds:   ptr.Int(b.Value.HighStressDurationSeconds),
+					RestStressSeconds:   ptr.Int(b.Value.RestStressDurationSeconds),
+					Stress:              ptr.StressLevel(garmingStressToIntervalsStress(b.Value.OverallStressLevel)),
+				}
+			}
+		}
+	}
+
+	return records, nil
 }
 
 // getBodyBatteryData will fetch all respiration data for the specified date range
@@ -201,7 +279,7 @@ func getRespirationData(
 	var request *http.Request
 	client := &http.Client{}
 	for _, url := range urls {
-		log.Printf("fetching %s...\n", url)
+		log.Printf("[respiration] fetching %s...\n", url)
 		request, err = http.NewRequest("GET", url, nil)
 		if err != nil {
 			log.Fatal(err)
@@ -226,9 +304,9 @@ func getRespirationData(
 		}
 
 		for _, b := range respiration {
-			if value, exists := records[b.Date]; exists {
+			if _, exists := records[b.Date]; exists {
 				record := records[b.Date]
-				record.Respiration = value.Respiration
+				record.Respiration = ptr.Float(b.AverageSleepRespiration)
 				records[b.Date] = record
 			} else {
 				records[b.Date] = intervals.WellnessRecord{
@@ -259,7 +337,7 @@ func getBodyBatteryData(
 	var request *http.Request
 	client := &http.Client{}
 	for _, url := range urls {
-		log.Printf("fetching %s...\n", url)
+		log.Printf("[body battery] fetching %s...\n", url)
 		request, err = http.NewRequest("GET", url, nil)
 		if err != nil {
 			log.Fatal(err)
@@ -284,10 +362,10 @@ func getBodyBatteryData(
 		}
 
 		for _, b := range battery {
-			if value, exists := records[b.Date]; exists {
+			if _, exists := records[b.Date]; exists {
 				record := records[b.Date]
-				record.BodyBatteryMin = value.BodyBatteryMin
-				record.BodyBatterMax = value.BodyBatterMax
+				record.BodyBatteryMin = ptr.Int(b.Value.LowBodyBattery)
+				record.BodyBatterMax = ptr.Int(b.Value.HighBodyBattery)
 				records[b.Date] = record
 			} else {
 				records[b.Date] = intervals.WellnessRecord{

@@ -31,6 +31,7 @@ go run backfill.go fromDate toDate // dates are in YYYY-MM-DD format
 - running `backfill` with large date ranges can lead to throttling from cronometer
 - `NETLIFY` as an environment variable is not available at runtime, only [these](https://docs.netlify.com/build/functions/environment-variables/#functions) are
 - netlify functions run in UTC time
+- spO2 has no 4 week window in Garmin Connect
 
 # TODO
 
