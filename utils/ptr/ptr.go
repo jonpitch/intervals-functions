@@ -4,3 +4,8 @@ package ptr
 func Float(f float64) *float64 {
 	return &f
 }
+
+// Int is a helper to create a pointer to an int
+func Int(i int) *int {
+	return &i
+}
