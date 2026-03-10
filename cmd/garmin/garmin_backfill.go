@@ -244,16 +244,18 @@ func getStressData(
 				record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
 				record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
 				record.RestStressSeconds = ptr.Int(b.Value.RestStressDurationSeconds)
-				record.Stress = ptr.StressLevel(garmingStressToIntervalsStress(b.Value.OverallStressLevel))
+				overall := garmingStressToIntervalsStress(b.Value.OverallStressLevel)
+				record.Stress = &overall
 				records[b.Date] = record
 			} else {
+				overall := garmingStressToIntervalsStress(b.Value.OverallStressLevel)
 				records[b.Date] = intervals.WellnessRecord{
 					ID:                  intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
 					LowStressSeconds:    ptr.Int(b.Value.LowStressDurationSeconds),
 					MediumStressSeconds: ptr.Int(b.Value.MediumStressDurationSeconds),
 					HighStressSeconds:   ptr.Int(b.Value.HighStressDurationSeconds),
 					RestStressSeconds:   ptr.Int(b.Value.RestStressDurationSeconds),
-					Stress:              ptr.StressLevel(garmingStressToIntervalsStress(b.Value.OverallStressLevel)),
+					Stress:              &overall,
 				}
 			}
 		}
