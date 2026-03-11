@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	intervals "intervals-functions/api"
+	"intervals-functions/utils/ptr"
 	"testing"
 	"time"
 
@@ -106,7 +107,341 @@ func TestGarminStressToIntervalsStress(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		result := garmingStressToIntervalsStress(c.Garmin)
+		result := garminStressToIntervalsStress(c.Garmin)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminStressAccumulator(t *testing.T) {
+	overallStress := garminStressToIntervalsStress(20)
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []StressEntry
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []StressEntry{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []StressEntry{
+				{
+					Date: timeA,
+					Value: StressValue{
+						OverallStressLevel:          20,
+						RestStressDurationSeconds:   100,
+						LowStressDurationSeconds:    200,
+						MediumStressDurationSeconds: 300,
+						HighStressDurationSeconds:   400,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:      ptr.Int(30),
+					BodyBatterMax:       ptr.Int(100),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []StressEntry{
+				{
+					Date: timeB,
+					Value: StressValue{
+						OverallStressLevel:          20,
+						RestStressDurationSeconds:   100,
+						LowStressDurationSeconds:    200,
+						MediumStressDurationSeconds: 300,
+						HighStressDurationSeconds:   400,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+				timeB: {
+					ID:                  intervals.WellnessRecordID("2026-02-01"),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []StressEntry{
+				{
+					Date: timeA,
+					Value: StressValue{
+						OverallStressLevel:          20,
+						RestStressDurationSeconds:   100,
+						LowStressDurationSeconds:    200,
+						MediumStressDurationSeconds: 300,
+						HighStressDurationSeconds:   400,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:      ptr.Int(30),
+					BodyBatterMax:       ptr.Int(100),
+					RestStressSeconds:   ptr.Int(900),
+					LowStressSeconds:    ptr.Int(800),
+					MediumStressSeconds: ptr.Int(700),
+					HighStressSeconds:   ptr.Int(600),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:      ptr.Int(30),
+					BodyBatterMax:       ptr.Int(100),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminStressAccumulator(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminRespirationAccumulator(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []RespirationEntry
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []RespirationEntry{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []RespirationEntry{
+				{
+					Date:                    timeA,
+					AverageSleepRespiration: 14.0,
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+					Respiration:    ptr.Float(14.0),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []RespirationEntry{
+				{
+					Date:                    timeB,
+					AverageSleepRespiration: 14.0,
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+				timeB: {
+					ID:          intervals.WellnessRecordID("2026-02-01"),
+					Respiration: ptr.Float(14.0),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []RespirationEntry{
+				{
+					Date:                    timeA,
+					AverageSleepRespiration: 14.0,
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:          intervals.WellnessRecordID("2026-01-01"),
+					Respiration: ptr.Float(9.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:          intervals.WellnessRecordID("2026-01-01"),
+					Respiration: ptr.Float(14.0),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminRespirationAccumulator(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminBodyBatteryAccumulator(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []BodyBatteryEntry
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []BodyBatteryEntry{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []BodyBatteryEntry{
+				{
+					Date: timeA,
+					Value: BodyBatteryValue{
+						LowBodyBattery:  30,
+						HighBodyBattery: 100,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:          intervals.WellnessRecordID("2026-01-01"),
+					Respiration: ptr.Float(12),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					Respiration:    ptr.Float(12.0),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []BodyBatteryEntry{
+				{
+					Date: timeB,
+					Value: BodyBatteryValue{
+						LowBodyBattery:  25,
+						HighBodyBattery: 95,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(10),
+					BodyBatterMax:  ptr.Int(90),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(10),
+					BodyBatterMax:  ptr.Int(90),
+				},
+				timeB: {
+					ID:             intervals.WellnessRecordID("2026-02-01"),
+					BodyBatteryMin: ptr.Int(25),
+					BodyBatterMax:  ptr.Int(95),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []BodyBatteryEntry{
+				{
+					Date: timeA,
+					Value: BodyBatteryValue{
+						LowBodyBattery:  45,
+						HighBodyBattery: 65,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(32),
+					BodyBatterMax:  ptr.Int(67),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(45),
+					BodyBatterMax:  ptr.Int(65),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminBodyBatteryAccumulator(c.Entries, c.Wellness)
 		assert.Equal(t, c.Expected, result)
 	}
 }

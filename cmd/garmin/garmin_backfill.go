@@ -114,6 +114,26 @@ func (d GarminDate) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + d.Format(garminDateLayout) + `"`), nil
 }
 
+type GarminData interface {
+	BodyBatteryEntry | RespirationEntry | StressEntry | SleepEntry
+}
+
+type GarminRequest struct {
+	Csrf        string
+	Cookie      string
+	FromDateStr string
+	ToDateStr   string
+}
+
+func NewGarminRequest(csrf string, cookie string, fromDateStr string, toDateString string) GarminRequest {
+	return GarminRequest{
+		Csrf:        csrf,
+		Cookie:      cookie,
+		FromDateStr: fromDateStr,
+		ToDateStr:   toDateString,
+	}
+}
+
 /*
 go run garmin_backfill.go bodybattery from to --dry-run
 - always provide from to for simplicify
@@ -150,17 +170,34 @@ func main() {
 	records := map[GarminDate]intervals.WellnessRecord{}
 
 	// accumulate all wellness data before updating in intervals
-	records, err = getBodyBatteryData(csrf, cookie, fromDateStr, toDateStr, records)
+	garminRequest := NewGarminRequest(csrf, cookie, fromDateStr, toDateStr)
+
+	records, err = getGarminData(
+		garminRequest,
+		BodyBatteryURL,
+		records,
+		garminBodyBatteryAccumulator,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	records, err = getRespirationData(csrf, cookie, fromDateStr, toDateStr, records)
+	records, err = getGarminData(
+		garminRequest,
+		RespirationURL,
+		records,
+		garminRespirationAccumulator,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	records, err = getStressData(csrf, cookie, fromDateStr, toDateStr, records)
+	records, err = getGarminData(
+		garminRequest,
+		StressURL,
+		records,
+		garminStressAccumulator,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -185,201 +222,125 @@ func main() {
 	log.Println("done")
 }
 
-// garmingStressToIntervalsStress maps a numerical garmin overall stress score to an intervals stress value
-func garmingStressToIntervalsStress(stress int) intervals.StressLevel {
-	if stress <= 25 {
-		return intervals.LowStress
-	} else if stress > 25 && stress <= 50 {
-		return intervals.AvgStress
-	} else if stress > 50 && stress <= 75 {
-		return intervals.HighStress
-	} else {
-		return intervals.ExtremeStress
-	}
-}
-
-func getStressData(
-	csrf string,
-	cookie string,
-	fromDateStr string,
-	toDateStr string,
-	records map[GarminDate]intervals.WellnessRecord,
+// getGarminData make requests to the Garmin API specified for the date ranges specified.
+func getGarminData[T GarminData](
+	r GarminRequest,
+	endpoint GarminAPIEndpoint,
+	wellness map[GarminDate]intervals.WellnessRecord,
+	accumulate func([]T, map[GarminDate]intervals.WellnessRecord) map[GarminDate]intervals.WellnessRecord,
 ) (map[GarminDate]intervals.WellnessRecord, error) {
-	urls, err := buildGarminURLs(StressURL, fromDateStr, toDateStr)
+	urls, err := buildGarminURLs(endpoint, r.FromDateStr, r.ToDateStr)
 	if err != nil {
-		log.Fatal(err)
+		return wellness, err
 	}
 
+	var data []T
 	var request *http.Request
 	client := &http.Client{}
 	for _, url := range urls {
 		log.Printf("[stress] fetching %s...\n", url)
 		request, err = http.NewRequest("GET", url, nil)
 		if err != nil {
-			log.Fatal(err)
+			return wellness, err
 		}
 
-		request.Header.Set("connect-csrf-token", csrf)
-		request.Header.Set("cookie", cookie)
+		request.Header.Set("connect-csrf-token", r.Csrf)
+		request.Header.Set("cookie", r.Cookie)
 		resp, err := client.Do(request)
 		if err != nil {
-			log.Fatal(err)
+			return wellness, err
 		}
 		defer resp.Body.Close()
 		bodyText, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatal(err)
+			return wellness, err
 		}
 
-		var stress []StressEntry
-		err = json.Unmarshal(bodyText, &stress)
+		err = json.Unmarshal(bodyText, &data)
 		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, b := range stress {
-			if _, exists := records[b.Date]; exists {
-				record := records[b.Date]
-				record.LowStressSeconds = ptr.Int(b.Value.LowStressDurationSeconds)
-				record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
-				record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
-				record.RestStressSeconds = ptr.Int(b.Value.RestStressDurationSeconds)
-				overall := garmingStressToIntervalsStress(b.Value.OverallStressLevel)
-				record.Stress = &overall
-				records[b.Date] = record
-			} else {
-				overall := garmingStressToIntervalsStress(b.Value.OverallStressLevel)
-				records[b.Date] = intervals.WellnessRecord{
-					ID:                  intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-					LowStressSeconds:    ptr.Int(b.Value.LowStressDurationSeconds),
-					MediumStressSeconds: ptr.Int(b.Value.MediumStressDurationSeconds),
-					HighStressSeconds:   ptr.Int(b.Value.HighStressDurationSeconds),
-					RestStressSeconds:   ptr.Int(b.Value.RestStressDurationSeconds),
-					Stress:              &overall,
-				}
-			}
+			return wellness, err
 		}
 	}
 
-	return records, nil
+	return accumulate(data, wellness), nil
 }
 
-// getBodyBatteryData will fetch all respiration data for the specified date range
-// and return an updated map of wellness records
-func getRespirationData(
-	csrf string,
-	cookie string,
-	fromDateStr string,
-	toDateStr string,
+// garminStressAccumulator converts StressEntry records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminStressAccumulator(
+	stress []StressEntry,
 	records map[GarminDate]intervals.WellnessRecord,
-) (map[GarminDate]intervals.WellnessRecord, error) {
-	urls, err := buildGarminURLs(RespirationURL, fromDateStr, toDateStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var request *http.Request
-	client := &http.Client{}
-	for _, url := range urls {
-		log.Printf("[respiration] fetching %s...\n", url)
-		request, err = http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		request.Header.Set("connect-csrf-token", csrf)
-		request.Header.Set("cookie", cookie)
-		resp, err := client.Do(request)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer resp.Body.Close()
-		bodyText, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		var respiration []RespirationEntry
-		err = json.Unmarshal(bodyText, &respiration)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, b := range respiration {
-			if _, exists := records[b.Date]; exists {
-				record := records[b.Date]
-				record.Respiration = ptr.Float(b.AverageSleepRespiration)
-				records[b.Date] = record
-			} else {
-				records[b.Date] = intervals.WellnessRecord{
-					ID:          intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-					Respiration: ptr.Float(b.AverageSleepRespiration),
-				}
+) map[GarminDate]intervals.WellnessRecord {
+	for _, b := range stress {
+		if _, exists := records[b.Date]; exists {
+			record := records[b.Date]
+			record.LowStressSeconds = ptr.Int(b.Value.LowStressDurationSeconds)
+			record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
+			record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
+			record.RestStressSeconds = ptr.Int(b.Value.RestStressDurationSeconds)
+			overall := garminStressToIntervalsStress(b.Value.OverallStressLevel)
+			record.Stress = &overall
+			records[b.Date] = record
+		} else {
+			overall := garminStressToIntervalsStress(b.Value.OverallStressLevel)
+			records[b.Date] = intervals.WellnessRecord{
+				ID:                  intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
+				LowStressSeconds:    ptr.Int(b.Value.LowStressDurationSeconds),
+				MediumStressSeconds: ptr.Int(b.Value.MediumStressDurationSeconds),
+				HighStressSeconds:   ptr.Int(b.Value.HighStressDurationSeconds),
+				RestStressSeconds:   ptr.Int(b.Value.RestStressDurationSeconds),
+				Stress:              &overall,
 			}
 		}
 	}
 
-	return records, nil
+	return records
 }
 
-// getBodyBatteryData will fetch all body battery data for the specified date range
-// and return an updated map of wellness records
-func getBodyBatteryData(
-	csrf string,
-	cookie string,
-	fromDateStr string,
-	toDateStr string,
+// garminRespirationAccumulator converts RespirationEntry records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminRespirationAccumulator(
+	respiration []RespirationEntry,
 	records map[GarminDate]intervals.WellnessRecord,
-) (map[GarminDate]intervals.WellnessRecord, error) {
-	urls, err := buildGarminURLs(BodyBatteryURL, fromDateStr, toDateStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var request *http.Request
-	client := &http.Client{}
-	for _, url := range urls {
-		log.Printf("[body battery] fetching %s...\n", url)
-		request, err = http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		request.Header.Set("connect-csrf-token", csrf)
-		request.Header.Set("cookie", cookie)
-		resp, err := client.Do(request)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer resp.Body.Close()
-		bodyText, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		var battery []BodyBatteryEntry
-		err = json.Unmarshal(bodyText, &battery)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, b := range battery {
-			if _, exists := records[b.Date]; exists {
-				record := records[b.Date]
-				record.BodyBatteryMin = ptr.Int(b.Value.LowBodyBattery)
-				record.BodyBatterMax = ptr.Int(b.Value.HighBodyBattery)
-				records[b.Date] = record
-			} else {
-				records[b.Date] = intervals.WellnessRecord{
-					ID:             intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-					BodyBatteryMin: ptr.Int(b.Value.LowBodyBattery),
-					BodyBatterMax:  ptr.Int(b.Value.HighBodyBattery),
-				}
+) map[GarminDate]intervals.WellnessRecord {
+	for _, b := range respiration {
+		if _, exists := records[b.Date]; exists {
+			record := records[b.Date]
+			record.Respiration = ptr.Float(b.AverageSleepRespiration)
+			records[b.Date] = record
+		} else {
+			records[b.Date] = intervals.WellnessRecord{
+				ID:          intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
+				Respiration: ptr.Float(b.AverageSleepRespiration),
 			}
 		}
 	}
 
-	return records, nil
+	return records
+}
+
+// garminBodyBatteryAccumulator converts BodyBatteryEntry records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminBodyBatteryAccumulator(
+	battery []BodyBatteryEntry,
+	records map[GarminDate]intervals.WellnessRecord,
+) map[GarminDate]intervals.WellnessRecord {
+	for _, b := range battery {
+		if _, exists := records[b.Date]; exists {
+			record := records[b.Date]
+			record.BodyBatteryMin = ptr.Int(b.Value.LowBodyBattery)
+			record.BodyBatterMax = ptr.Int(b.Value.HighBodyBattery)
+			records[b.Date] = record
+		} else {
+			records[b.Date] = intervals.WellnessRecord{
+				ID:             intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
+				BodyBatteryMin: ptr.Int(b.Value.LowBodyBattery),
+				BodyBatterMax:  ptr.Int(b.Value.HighBodyBattery),
+			}
+		}
+	}
+
+	return records
 }
 
 // getGarminHeaders pulls just the minimum required values from a garmin connect cURL request
@@ -459,4 +420,17 @@ func buildGarminURLs(endpoint GarminAPIEndpoint, startStr string, endStr string)
 	}
 
 	return urls, nil
+}
+
+// garminStressToIntervalsStress maps a numerical garmin overall stress score to an intervals stress value
+func garminStressToIntervalsStress(stress int) intervals.StressLevel {
+	if stress <= 25 {
+		return intervals.LowStress
+	} else if stress > 25 && stress <= 50 {
+		return intervals.AvgStress
+	} else if stress > 50 && stress <= 75 {
+		return intervals.HighStress
+	} else {
+		return intervals.ExtremeStress
+	}
 }
