@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/ptr"
@@ -12,8 +13,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 type WeightResponse struct {
@@ -60,7 +59,6 @@ const (
 type SleepValue struct {
 	RemTimeSeconds        int                `json:"remTime"`
 	RestingHeartRate      int                `json:"restingHeartRate"`
-	Respiration           float64            `json:"respiration"`
 	TotalSleepTimeSeconds int                `json:"totalSleepTimeInSeconds"`
 	DeepTimeSeconds       int                `json:"deepTime"`
 	AwakeTimeSeconds      int                `json:"awakeTime"`
@@ -165,11 +163,10 @@ func NewGarminRequest(csrf string, cookie string, fromDateStr string, toDateStri
 }
 
 /*
-go run garmin_backfill.go bodybattery from to --dry-run
-- always provide from to for simplicify
-- <from> is the furthest point back in time
-- <to> is when to stop
-- option to dry run
+backfill data from garmin connect to intervals.icu.
+
+signature:
+go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -metric -dry-run bodybattery,stress,respiration,sleep,weight
 */
 func main() {
 	const curlPath = "./request/curl.txt"
@@ -178,16 +175,60 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = godotenv.Load("../../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	fromDateStr := flag.String("from", "", "start date of backfill (YYYY-MM-DD format)")
+	toDateStr := flag.String("to", "", "last day of backfill (YYYY-MM-DD format)")
+	intervalsAthleteID := flag.String("athleteId", "", "intervals.icu athlete ID")
+	intervalsApiKey := flag.String("apiKey", "", "intervals.icu API key")
+	metric := flag.Bool("metric", false, "Use metric units (g, kg)")
+	dryRun := flag.Bool("dry-run", false, "Do not persist data to intervals.icu, just print")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) != 1 {
+		log.Fatal("usage: garmin_backfill <garmin metrics> -from=X -to=Y -athleteId=A -apiKey=B --metric --dry-run")
 	}
 
-	// TODO parameters
-	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
-	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
-	if intervalsAthleteID == "" || intervalsApiKey == "" {
-		log.Fatal("INTERVALS_ATHLETE_ID or INTERVALS_API_KEY is not set")
+	if intervalsApiKey == nil || intervalsAthleteID == nil {
+		log.Fatal("intervals API key and athlete ID are required")
+	}
+
+	if fromDateStr == nil || toDateStr == nil {
+		log.Fatal("from date and to date are required, and in the format of YYYY-MM-DD")
+	}
+
+	_, err = validDate(*fromDateStr)
+	if err != nil {
+		log.Fatal("from date is invalid, use YYYY-MM-DD format")
+	}
+
+	_, err = validDate(*toDateStr)
+	if err != nil {
+		log.Fatal("to date is invalid, use YYYY-MM-DD format")
+	}
+
+	fetchBodyBattery := false
+	fetchStress := false
+	fetchRespiration := false
+	fetchSleep := false
+	fetchWeight := false
+
+	garminArgs := args[0]
+	garminOptions := strings.Split(garminArgs, ",")
+	for _, o := range garminOptions {
+		switch o {
+		case "bodybattery":
+			fetchBodyBattery = true
+		case "stress":
+			fetchStress = true
+		case "respiration":
+			fetchRespiration = true
+		case "sleep":
+			fetchSleep = true
+		case "weight":
+			fetchWeight = true
+		default:
+			log.Fatalf("unknown garmin option")
+		}
 	}
 
 	csrf, cookie, err := getGarminHeaders(curlContents)
@@ -195,78 +236,99 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// TODO parameters
-	fromDateStr := "2026-01-01"
-	toDateStr := "2026-03-01"
-
 	records := map[GarminDate]intervals.WellnessRecord{}
 
 	// accumulate all wellness data before updating in intervals
-	garminRequest := NewGarminRequest(csrf, cookie, fromDateStr, toDateStr)
+	garminRequest := NewGarminRequest(csrf, cookie, *fromDateStr, *toDateStr)
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		BodyBatteryURL,
-		records,
-		garminBodyBatteryAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
+	if fetchBodyBattery {
+		records, err = getGarminArrayData(
+			garminRequest,
+			BodyBatteryURL,
+			records,
+			garminBodyBatteryAccumulator,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		RespirationURL,
-		records,
-		garminRespirationAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
+	if fetchRespiration {
+		records, err = getGarminArrayData(
+			garminRequest,
+			RespirationURL,
+			records,
+			garminRespirationAccumulator,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		StressURL,
-		records,
-		garminStressAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
+	if fetchStress {
+		records, err = getGarminArrayData(
+			garminRequest,
+			StressURL,
+			records,
+			garminStressAccumulator,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	records, err = getGarminOveralAndIndividualData(
-		garminRequest,
-		SleepURL,
-		records,
-		func(resp SleepResponse) []SleepEntry { return resp.IndividualStats },
-		garminSleepAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
+	if fetchSleep {
+		records, err = getGarminOveralAndIndividualData(
+			garminRequest,
+			SleepURL,
+			records,
+			func(resp SleepResponse) []SleepEntry { return resp.IndividualStats },
+			garminSleepAccumulator,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	records, err = getGarminOveralAndIndividualData(
-		garminRequest,
-		WeightURL,
-		records,
-		func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
-		// TODO paramter
-		garminWeightAccumulatorWithUnits(Metric),
-	)
-	if err != nil {
-		log.Fatal(err)
+	if fetchWeight {
+		var units WeightUnits
+		if metric != nil && *metric {
+			units = Metric
+		} else {
+			units = Imperial
+		}
+
+		records, err = getGarminOveralAndIndividualData(
+			garminRequest,
+			WeightURL,
+			records,
+			func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
+			garminWeightAccumulatorWithUnits(units),
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// collect wellness records to bulk update
 	var wellness []intervals.WellnessRecord
 	for _, w := range records {
 		wellness = append(wellness, w)
+		if *dryRun {
+			data, err := json.MarshalIndent(w, "", "  ")
+			if err != nil {
+				fmt.Printf("error marshalling wellness record: %v", err)
+			}
+			fmt.Println(string(data))
+		}
 	}
 
-	intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, intervalsApiKey, intervalsAthleteID)
-	err = intervalsClient.BulkUpdateWellnessRecord(wellness)
-	if err != nil {
-		log.Fatal(err)
+	if !*dryRun {
+		intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, *intervalsApiKey, *intervalsAthleteID)
+		err = intervalsClient.BulkUpdateWellnessRecord(wellness)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	log.Println("done")
@@ -469,7 +531,6 @@ func garminSleepAccumulator(
 			record.HrvRmssd = ptr.Float(s.Values.AverageOvernightHrv)
 			record.RestingHr = ptr.Int(s.Values.RestingHeartRate)
 			record.OxygenSaturation = ptr.Float(s.Values.Spo2)
-			record.Respiration = ptr.Float(s.Values.Respiration)
 			record.SleepNeedMinutes = ptr.Int(s.Values.SleepNeedMinutes)
 			record.SleepRemTimeSeconds = ptr.Int(s.Values.RemTimeSeconds)
 			record.SleepDeepTimeSeconds = ptr.Int(s.Values.DeepTimeSeconds)
@@ -485,7 +546,6 @@ func garminSleepAccumulator(
 				HrvRmssd:              ptr.Float(s.Values.AverageOvernightHrv),
 				RestingHr:             ptr.Int(s.Values.RestingHeartRate),
 				OxygenSaturation:      ptr.Float(s.Values.Spo2),
-				Respiration:           ptr.Float(s.Values.Respiration),
 				SleepNeedMinutes:      ptr.Int(s.Values.SleepNeedMinutes),
 				SleepRemTimeSeconds:   ptr.Int(s.Values.RemTimeSeconds),
 				SleepDeepTimeSeconds:  ptr.Int(s.Values.DeepTimeSeconds),
@@ -647,4 +707,9 @@ func garminApiToLabel(api GarminAPIEndpoint) string {
 	default:
 		return ""
 	}
+}
+
+// validDate checks the command supplied args for dates are in the correct format
+func validDate(d string) (time.Time, error) {
+	return time.Parse("2006-01-02", d)
 }
