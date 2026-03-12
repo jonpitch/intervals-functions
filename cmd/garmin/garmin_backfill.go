@@ -178,35 +178,35 @@ func main() {
 	// accumulate all wellness data before updating in intervals
 	garminRequest := NewGarminRequest(csrf, cookie, fromDateStr, toDateStr)
 
-	// records, err = getGarminArrayData(
-	// 	garminRequest,
-	// 	BodyBatteryURL,
-	// 	records,
-	// 	garminBodyBatteryAccumulator,
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	records, err = getGarminArrayData(
+		garminRequest,
+		BodyBatteryURL,
+		records,
+		garminBodyBatteryAccumulator,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// records, err = getGarminArrayData(
-	// 	garminRequest,
-	// 	RespirationURL,
-	// 	records,
-	// 	garminRespirationAccumulator,
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	records, err = getGarminArrayData(
+		garminRequest,
+		RespirationURL,
+		records,
+		garminRespirationAccumulator,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// records, err = getGarminArrayData(
-	// 	garminRequest,
-	// 	StressURL,
-	// 	records,
-	// 	garminStressAccumulator,
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	records, err = getGarminArrayData(
+		garminRequest,
+		StressURL,
+		records,
+		garminStressAccumulator,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	records, err = getGarminOveralAndIndividualData(
 		garminRequest,
