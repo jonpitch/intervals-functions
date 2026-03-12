@@ -33,13 +33,24 @@ type WellnessRecord struct {
 	OxygenSaturation *float64         `json:"spO2"`
 	Respiration      *float64         `json:"respiration"`
 	Stress           *StressLevel     `json:"stress"`
+	SleepScore       *int             `json:"sleepScore"`
+	SleepSeconds     *int             `json:"sleepSecs"`
+	SleepQuality     *SleepQuality    `json:"sleepQuality"`
+	HrvRmssd         *float64         `json:"hrv"`
+	RestingHr        *int             `json:"restingHR"`
+
 	// custom attributes
-	BodyBatteryMin      *int `json:"BodyBatteryMin"`
-	BodyBatterMax       *int `json:"BodyBatteryMax"`
-	RestStressSeconds   *int `json:"StressRestSeconds"`
-	LowStressSeconds    *int `json:"StressLowSeconds"`
-	MediumStressSeconds *int `json:"StressMediumSeconds"`
-	HighStressSeconds   *int `json:"StressHighSeconds"`
+	BodyBatteryMin        *int `json:"BodyBatteryMin"`
+	BodyBatterMax         *int `json:"BodyBatteryMax"`
+	RestStressSeconds     *int `json:"StressRestSeconds"`
+	LowStressSeconds      *int `json:"StressLowSeconds"`
+	MediumStressSeconds   *int `json:"StressMediumSeconds"`
+	HighStressSeconds     *int `json:"StressHighSeconds"`
+	SleepNeedMinutes      *int `json:"SleepNeedMinutes"`
+	SleepRemTimeSeconds   *int `json:"SleepRemSeconds"`
+	SleepDeepTimeSeconds  *int `json:"SleepDeepSeconds"`
+	SleepLightTimeSeconds *int `json:"SleepLightSeconds"`
+	SleepAwakeTimeSeconds *int `json:"SleepAwakeSeconds"`
 }
 
 type StressLevel int
@@ -49,6 +60,15 @@ const (
 	AvgStress     StressLevel = 2
 	HighStress    StressLevel = 3
 	ExtremeStress StressLevel = 4
+)
+
+type SleepQuality int
+
+const (
+	GreatSleepQuality   SleepQuality = 1
+	GoodSleepQuality    SleepQuality = 2
+	AverageSleepQuality SleepQuality = 3
+	PoorSleepQuality    SleepQuality = 4
 )
 
 // GetWellnessRecord sends a GET request to

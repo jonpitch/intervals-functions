@@ -38,3 +38,4 @@ go run backfill.go fromDate toDate // dates are in YYYY-MM-DD format
 - move backfill to cronometer_backfill
 - implement garmin backfill
 - build backfill binaries to /dist
+- remove respiration/spo2 from cronometer

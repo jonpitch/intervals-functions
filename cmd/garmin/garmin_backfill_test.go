@@ -445,3 +445,222 @@ func TestGarminBodyBatteryAccumulator(t *testing.T) {
 		assert.Equal(t, c.Expected, result)
 	}
 }
+
+func TestSleepAccumulator(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+	greatSleepQuality := intervals.GreatSleepQuality
+
+	cases := []struct {
+		Response SleepResponse
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Response: SleepResponse{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Response: SleepResponse{
+				IndividualStats: []SleepEntry{
+					{
+						Date: timeA,
+						Values: SleepValue{
+							RemTimeSeconds:        1,
+							RestingHeartRate:      40,
+							Respiration:           8.0,
+							TotalSleepTimeSeconds: 100,
+							DeepTimeSeconds:       2,
+							AwakeTimeSeconds:      3,
+							SleepQuality:          Excellent,
+							Spo2:                  95.0,
+							LightTimeSeconds:      4,
+							AverageOvernightHrv:   66,
+							SleepNeedMinutes:      9,
+							SleepScore:            99,
+						},
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(11),
+					BodyBatterMax:  ptr.Int(97),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                    intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:        ptr.Int(11),
+					BodyBatterMax:         ptr.Int(97),
+					SleepRemTimeSeconds:   ptr.Int(1),
+					RestingHr:             ptr.Int(40),
+					Respiration:           ptr.Float(8.0),
+					SleepSeconds:          ptr.Int(100),
+					SleepDeepTimeSeconds:  ptr.Int(2),
+					SleepAwakeTimeSeconds: ptr.Int(3),
+					SleepQuality:          &greatSleepQuality,
+					OxygenSaturation:      ptr.Float(95.0),
+					SleepLightTimeSeconds: ptr.Int(4),
+					HrvRmssd:              ptr.Float(66),
+					SleepNeedMinutes:      ptr.Int(9),
+					SleepScore:            ptr.Int(99),
+				},
+			},
+		},
+		{
+			// add a new record
+			Response: SleepResponse{
+				IndividualStats: []SleepEntry{
+					{
+						Date: timeB,
+						Values: SleepValue{
+							RemTimeSeconds:        2,
+							RestingHeartRate:      41,
+							Respiration:           8.1,
+							TotalSleepTimeSeconds: 101,
+							DeepTimeSeconds:       21,
+							AwakeTimeSeconds:      31,
+							SleepQuality:          Excellent,
+							Spo2:                  96.0,
+							LightTimeSeconds:      5,
+							AverageOvernightHrv:   67,
+							SleepNeedMinutes:      10,
+							SleepScore:            100,
+						},
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(10),
+					BodyBatterMax:  ptr.Int(90),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(10),
+					BodyBatterMax:  ptr.Int(90),
+				},
+				timeB: {
+					ID:                    intervals.WellnessRecordID("2026-02-01"),
+					SleepRemTimeSeconds:   ptr.Int(2),
+					RestingHr:             ptr.Int(41),
+					Respiration:           ptr.Float(8.1),
+					SleepSeconds:          ptr.Int(101),
+					SleepDeepTimeSeconds:  ptr.Int(21),
+					SleepAwakeTimeSeconds: ptr.Int(31),
+					SleepQuality:          &greatSleepQuality,
+					OxygenSaturation:      ptr.Float(96.0),
+					SleepLightTimeSeconds: ptr.Int(5),
+					HrvRmssd:              ptr.Float(67),
+					SleepNeedMinutes:      ptr.Int(10),
+					SleepScore:            ptr.Int(100),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Response: SleepResponse{
+				IndividualStats: []SleepEntry{
+					{
+						Date: timeA,
+						Values: SleepValue{
+							RemTimeSeconds:        1,
+							RestingHeartRate:      40,
+							Respiration:           8.0,
+							TotalSleepTimeSeconds: 100,
+							DeepTimeSeconds:       2,
+							AwakeTimeSeconds:      3,
+							SleepQuality:          Excellent,
+							Spo2:                  95.0,
+							LightTimeSeconds:      4,
+							AverageOvernightHrv:   66,
+							SleepNeedMinutes:      9,
+							SleepScore:            99,
+						},
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                    intervals.WellnessRecordID("2026-01-01"),
+					SleepRemTimeSeconds:   ptr.Int(2),
+					RestingHr:             ptr.Int(41),
+					Respiration:           ptr.Float(8.1),
+					SleepSeconds:          ptr.Int(101),
+					SleepDeepTimeSeconds:  ptr.Int(21),
+					SleepAwakeTimeSeconds: ptr.Int(31),
+					SleepQuality:          &greatSleepQuality,
+					OxygenSaturation:      ptr.Float(96.0),
+					SleepLightTimeSeconds: ptr.Int(5),
+					HrvRmssd:              ptr.Float(67),
+					SleepNeedMinutes:      ptr.Int(10),
+					SleepScore:            ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:                    intervals.WellnessRecordID("2026-01-01"),
+					SleepRemTimeSeconds:   ptr.Int(1),
+					RestingHr:             ptr.Int(40),
+					Respiration:           ptr.Float(8.0),
+					SleepSeconds:          ptr.Int(100),
+					SleepDeepTimeSeconds:  ptr.Int(2),
+					SleepAwakeTimeSeconds: ptr.Int(3),
+					SleepQuality:          &greatSleepQuality,
+					OxygenSaturation:      ptr.Float(95.0),
+					SleepLightTimeSeconds: ptr.Int(4),
+					HrvRmssd:              ptr.Float(66),
+					SleepNeedMinutes:      ptr.Int(9),
+					SleepScore:            ptr.Int(99),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminSleepAccumulator(c.Response, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminSleepQualityToIntervals(t *testing.T) {
+	cases := []struct {
+		Garmin   GarminSleepQuality
+		Expected intervals.SleepQuality
+	}{
+		{Garmin: Excellent, Expected: intervals.GreatSleepQuality},
+		{Garmin: Good, Expected: intervals.GoodSleepQuality},
+		{Garmin: Fair, Expected: intervals.AverageSleepQuality},
+		{Garmin: Poor, Expected: intervals.PoorSleepQuality},
+	}
+
+	for _, c := range cases {
+		result := garminSleepQualityToIntervalsSleepQuality(c.Garmin)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminApiEndpointLabel(t *testing.T) {
+	cases := []struct {
+		Endpoint GarminAPIEndpoint
+		Expected string
+	}{
+		{Endpoint: BodyBatteryURL, Expected: "body battery"},
+		{Endpoint: StressURL, Expected: "stress"},
+		{Endpoint: RespirationURL, Expected: "respiration"},
+		{Endpoint: SleepURL, Expected: "sleep"},
+	}
+
+	for _, c := range cases {
+		result := garminApiToLabel(c.Endpoint)
+		assert.Equal(t, c.Expected, result)
+	}
+}
