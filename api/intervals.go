@@ -38,6 +38,7 @@ type WellnessRecord struct {
 	SleepQuality     *SleepQuality    `json:"sleepQuality"`
 	HrvRmssd         *float64         `json:"hrv"`
 	RestingHr        *int             `json:"restingHR"`
+	Weight           *float64         `json:"weight"` // stored in user's measurement preference (kg, lbs)
 
 	// custom attributes
 	BodyBatteryMin        *int `json:"BodyBatteryMin"`

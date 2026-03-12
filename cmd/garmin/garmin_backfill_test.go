@@ -80,6 +80,15 @@ func TestGarminUrls(t *testing.T) {
 		fmt.Sprintf("%s%s/2026-02-26/2026-03-01", GarminAPI, SleepURL),
 	}, urls)
 
+	// weight URL is slightly different
+	urls, err = buildGarminURLs(WeightURL, from, to)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		fmt.Sprintf("%s%s/2026-01-01/2026-01-28?includeAll=true", GarminAPI, WeightURL),
+		fmt.Sprintf("%s%s/2026-01-29/2026-02-25?includeAll=true", GarminAPI, WeightURL),
+		fmt.Sprintf("%s%s/2026-02-26/2026-03-01?includeAll=true", GarminAPI, WeightURL),
+	}, urls)
+
 	// from/to within 28 day window
 	to = "2026-01-15"
 	urls, err = buildGarminURLs(SleepURL, from, to)
@@ -631,6 +640,210 @@ func TestSleepAccumulator(t *testing.T) {
 	}
 }
 
+func TestGarminWeightAccumulator_Metric(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []WeightSummary
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []WeightSummary{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight: 2000,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+					Weight:         ptr.Float(2),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeB,
+					LatestWeight: LatestWeight{
+						Weight: 3000,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+				timeB: {
+					ID:     intervals.WellnessRecordID("2026-02-01"),
+					Weight: ptr.Float(3),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight: 8000,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:     intervals.WellnessRecordID("2026-01-01"),
+					Weight: ptr.Float(5.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:     intervals.WellnessRecordID("2026-01-01"),
+					Weight: ptr.Float(8.0),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		accum := garminWeightAccumulatorWithUnits(Metric)
+		result := accum(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestGarminWeightAccumulator_Imperial(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []WeightSummary
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []WeightSummary{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight: 32.0,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+					Weight:         ptr.Float(2.0),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeB,
+					LatestWeight: LatestWeight{
+						Weight: 48.0,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+				timeB: {
+					ID:     intervals.WellnessRecordID("2026-02-01"),
+					Weight: ptr.Float(3.0),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight: 80.0,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:     intervals.WellnessRecordID("2026-01-01"),
+					Weight: ptr.Float(4.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:     intervals.WellnessRecordID("2026-01-01"),
+					Weight: ptr.Float(5.0),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		accum := garminWeightAccumulatorWithUnits(Imperial)
+		result := accum(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
 func TestGarminSleepQualityToIntervals(t *testing.T) {
 	cases := []struct {
 		Garmin   GarminSleepQuality
@@ -657,6 +870,7 @@ func TestGarminApiEndpointLabel(t *testing.T) {
 		{Endpoint: StressURL, Expected: "stress"},
 		{Endpoint: RespirationURL, Expected: "respiration"},
 		{Endpoint: SleepURL, Expected: "sleep"},
+		{Endpoint: WeightURL, Expected: "weight"},
 	}
 
 	for _, c := range cases {

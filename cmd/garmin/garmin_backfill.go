@@ -16,6 +16,29 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type WeightResponse struct {
+	DailyWeightSummaries []WeightSummary `json:"dailyWeightSummaries"`
+}
+
+// people can measure themselves multiple times throughout the day.
+// intervals.icu doesn't support multiple weights, and keeps the most recent measurement.
+// we'll use latestWeight for consistency rather than choosing min/max or some other measurement.
+type WeightSummary struct {
+	SummaryDate  GarminDate   `json:"summaryDate"`
+	LatestWeight LatestWeight `json:"latestWeight"`
+}
+
+type LatestWeight struct {
+	Weight float64 `json:"weight"`
+}
+
+type WeightUnits int
+
+const (
+	Metric   WeightUnits = iota
+	Imperial             = iota
+)
+
 type SleepResponse struct {
 	IndividualStats []SleepEntry `json:"individualStats"`
 }
@@ -86,6 +109,7 @@ const (
 	RespirationURL GarminAPIEndpoint = "/usersummary-service/stats/respiration/daily"
 	StressURL      GarminAPIEndpoint = "/usersummary-service/stats/stress/daily"
 	SleepURL       GarminAPIEndpoint = "/sleep-service/stats/sleep/daily"
+	WeightURL      GarminAPIEndpoint = "/weight-service/weight/range"
 )
 
 type GarminDate struct {
@@ -117,7 +141,7 @@ func (d GarminDate) MarshalJSON() ([]byte, error) {
 }
 
 type GarminOverallAndIndividualResponseData interface {
-	SleepResponse
+	SleepResponse | WeightResponse
 }
 
 type GarminArrayResponseData interface {
@@ -159,6 +183,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	// TODO parameters
 	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
 	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
 	if intervalsAthleteID == "" || intervalsApiKey == "" {
@@ -170,6 +195,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// TODO parameters
 	fromDateStr := "2026-01-01"
 	toDateStr := "2026-03-01"
 
@@ -219,7 +245,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// TODO weight - needs some thought. there's min/max, latest weight. weights appear to be in grams?
+	records, err = getGarminOveralAndIndividualData(
+		garminRequest,
+		WeightURL,
+		records,
+		func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
+		// TODO paramter
+		garminWeightAccumulatorWithUnits(Metric),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// collect wellness records to bulk update
 	var wellness []intervals.WellnessRecord
@@ -332,6 +368,40 @@ func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, 
 	return accumulate(data, wellness), nil
 }
 
+// garminWeightAccumulatorWithUnits converts WeightSummary records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminWeightAccumulatorWithUnits(units WeightUnits) func(
+	[]WeightSummary,
+	map[GarminDate]intervals.WellnessRecord,
+) map[GarminDate]intervals.WellnessRecord {
+	return func(
+		weight []WeightSummary,
+		records map[GarminDate]intervals.WellnessRecord,
+	) map[GarminDate]intervals.WellnessRecord {
+		for _, w := range weight {
+			val := w.LatestWeight.Weight
+			switch units {
+			case Metric:
+				val = val / 1000.0
+			case Imperial:
+				val = val / 16.0
+			}
+
+			if record, exists := records[w.SummaryDate]; exists {
+				record.Weight = ptr.Float(val)
+				records[w.SummaryDate] = record
+			} else {
+				records[w.SummaryDate] = intervals.WellnessRecord{
+					ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
+					Weight: ptr.Float(val),
+				}
+			}
+		}
+
+		return records
+	}
+}
+
 // garminStressAccumulator converts StressEntry records to intervals.WellnessRecord and accumulates
 // them on the provided map
 func garminStressAccumulator(
@@ -339,8 +409,7 @@ func garminStressAccumulator(
 	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, b := range stress {
-		if _, exists := records[b.Date]; exists {
-			record := records[b.Date]
+		if record, exists := records[b.Date]; exists {
 			record.LowStressSeconds = ptr.Int(b.Value.LowStressDurationSeconds)
 			record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
 			record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
@@ -371,8 +440,7 @@ func garminRespirationAccumulator(
 	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, b := range respiration {
-		if _, exists := records[b.Date]; exists {
-			record := records[b.Date]
+		if record, exists := records[b.Date]; exists {
 			record.Respiration = ptr.Float(b.AverageSleepRespiration)
 			records[b.Date] = record
 		} else {
@@ -394,8 +462,7 @@ func garminSleepAccumulator(
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, s := range sleep {
 		quality := garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
-		if _, exists := records[s.Date]; exists {
-			record := records[s.Date]
+		if record, exists := records[s.Date]; exists {
 			record.SleepScore = ptr.Int(s.Values.SleepScore)
 			record.SleepSeconds = ptr.Int(s.Values.TotalSleepTimeSeconds)
 			record.SleepQuality = &quality
@@ -438,8 +505,7 @@ func garminBodyBatteryAccumulator(
 	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, b := range battery {
-		if _, exists := records[b.Date]; exists {
-			record := records[b.Date]
+		if record, exists := records[b.Date]; exists {
 			record.BodyBatteryMin = ptr.Int(b.Value.LowBodyBattery)
 			record.BodyBatterMax = ptr.Int(b.Value.HighBodyBattery)
 			records[b.Date] = record
@@ -527,6 +593,10 @@ func buildGarminURLs(endpoint GarminAPIEndpoint, startStr string, endStr string)
 			curEnd.Format(layout),
 		)
 
+		if endpoint == WeightURL {
+			url += "?includeAll=true"
+		}
+
 		urls = append(urls, url)
 		curStart = curEnd.AddDate(0, 0, 1)
 	}
@@ -572,6 +642,8 @@ func garminApiToLabel(api GarminAPIEndpoint) string {
 		return "stress"
 	case SleepURL:
 		return "sleep"
+	case WeightURL:
+		return "weight"
 	default:
 		return ""
 	}
