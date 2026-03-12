@@ -178,40 +178,41 @@ func main() {
 	// accumulate all wellness data before updating in intervals
 	garminRequest := NewGarminRequest(csrf, cookie, fromDateStr, toDateStr)
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		BodyBatteryURL,
-		records,
-		garminBodyBatteryAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// records, err = getGarminArrayData(
+	// 	garminRequest,
+	// 	BodyBatteryURL,
+	// 	records,
+	// 	garminBodyBatteryAccumulator,
+	// )
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		RespirationURL,
-		records,
-		garminRespirationAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// records, err = getGarminArrayData(
+	// 	garminRequest,
+	// 	RespirationURL,
+	// 	records,
+	// 	garminRespirationAccumulator,
+	// )
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	records, err = getGarminArrayData(
-		garminRequest,
-		StressURL,
-		records,
-		garminStressAccumulator,
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// records, err = getGarminArrayData(
+	// 	garminRequest,
+	// 	StressURL,
+	// 	records,
+	// 	garminStressAccumulator,
+	// )
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	records, err = getGarminOveralAndIndividualData(
 		garminRequest,
 		SleepURL,
 		records,
+		func(resp SleepResponse) []SleepEntry { return resp.IndividualStats },
 		garminSleepAccumulator,
 	)
 	if err != nil {
@@ -270,29 +271,34 @@ func getGarminArrayData[T GarminArrayResponseData](
 			return wellness, err
 		}
 
-		err = json.Unmarshal(bodyText, &data)
+		var records []T
+		err = json.Unmarshal(bodyText, &records)
 		if err != nil {
 			return wellness, err
 		}
+
+		data = append(data, records...)
 	}
 
 	return accumulate(data, wellness), nil
 }
 
 // getGarminOveralAndIndividualData make requests to the Garmin API specified for the date ranges specified.
-// this is meant to handle garmin API endpoints that return an object with "overallStats" and "individualStats" data
-func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData](
+// this is meant to handle garmin API endpoints that return an object with "overallStats" and "individualStats" data.
+// this accumulator only handles individual stats
+func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, E any](
 	r GarminRequest,
 	endpoint GarminAPIEndpoint,
 	wellness map[GarminDate]intervals.WellnessRecord,
-	accumulate func(T, map[GarminDate]intervals.WellnessRecord) map[GarminDate]intervals.WellnessRecord,
+	extract func(T) []E,
+	accumulate func([]E, map[GarminDate]intervals.WellnessRecord) map[GarminDate]intervals.WellnessRecord,
 ) (map[GarminDate]intervals.WellnessRecord, error) {
 	urls, err := buildGarminURLs(endpoint, r.FromDateStr, r.ToDateStr)
 	if err != nil {
 		return wellness, err
 	}
 
-	var data T
+	var data []E
 	var request *http.Request
 	client := &http.Client{}
 	for _, url := range urls {
@@ -314,10 +320,13 @@ func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData](
 			return wellness, err
 		}
 
-		err = json.Unmarshal(bodyText, &data)
+		var payload T
+		err = json.Unmarshal(bodyText, &payload)
 		if err != nil {
 			return wellness, err
 		}
+
+		data = append(data, extract(payload)...)
 	}
 
 	return accumulate(data, wellness), nil
@@ -380,10 +389,9 @@ func garminRespirationAccumulator(
 // garminSleepAccumulator converts SleepEntry records to intervals.WellnessRecord and accumulates
 // them on the provided map
 func garminSleepAccumulator(
-	sleepResponse SleepResponse,
+	sleep []SleepEntry,
 	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
-	sleep := sleepResponse.IndividualStats
 	for _, s := range sleep {
 		quality := garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
 		if _, exists := records[s.Date]; exists {

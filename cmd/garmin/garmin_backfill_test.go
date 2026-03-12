@@ -626,7 +626,7 @@ func TestSleepAccumulator(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		result := garminSleepAccumulator(c.Response, c.Wellness)
+		result := garminSleepAccumulator(c.Response.IndividualStats, c.Wellness)
 		assert.Equal(t, c.Expected, result)
 	}
 }
