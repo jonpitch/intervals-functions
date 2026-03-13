@@ -32,11 +32,11 @@ go run backfill.go 2026-01-01 2026-03-01
 
 ## garmin
 
-intervals provides a garmin sync natively, which will sync a lot of data from garmin from that point forward. garmin also provides access to your historical activity data, but not wellness data. if you want to backfill intervals with wellness data (sleep, weight, etc.), `garmin_backfill` is the way to go.
+intervals provides a garmin sync natively, which will sync a lot of data from garmin from that point forward. garmin also provides access to your historical activity data, but not wellness data. if you want to backfill intervals with wellness data (sleep, weight, etc.), `garmin.go` is the way to go.
 
 ### usage
 
-before backfilling any data, there is some required setup in intervals. the following wellness fields need to be created in order to have a destination for garmin data:
+before backfilling any data, there is some required setup in intervals. the following wellness fields need to exist order to have a destination for garmin data:
 - `BodyBatteryMin`
 - `BodyBatteryMax`
 - `StressRestSeconds`
@@ -49,25 +49,25 @@ before backfilling any data, there is some required setup in intervals. the foll
 - `SleepLightSeconds`
 - `SleepAwakeSeconds`
 
-you can create these fields how ever you want, but the values listed above *must* be the `Code` for the field. all of those values are integers, so i would also recommend a format of `0.f`.
+i have already created these fields and made them publicly available (search for these names or my username `pitcherella`). alternatively, you can create these fields however you want, but the values listed above *must* be the `Code` for the field. all of those values are integers, so i would also recommend a format of `0.f`. for the fields that are seconds or minutes, intervals lets you choose a conversion so that they're represented in hours/minutes/seconds if you wish.
 
-`garmin_backfill` works by mimicing web requests Garmin Connect is making to its internal API. there's no login implemented, so we'll need some data to make authenticated requests to garmin:
+`garmin.go` works by mimicing garmin connect web requests. there's no login implemented, so we'll need some data to make authenticated requests to garmin:
 - log in to Garmin Connect
 - open developer tools (in Chrome: View -> Developer -> Developer Tools)
 - click on the Network tab, and select the `Fetch/XHR` tab
 - in Garmin Connect, navigate to a Health Stats page, like Sleep. you should see a request pop up in Developer tools that looks like today's date (`2026-01-01`)
 - right click on that date, `Copy` -> `Copy as cURL`
-- relative to the `garmin_backfill` binary you will execute, `mkdir request`
+- relative to the `garmin.go` binary you will execute, `mkdir request`
 - create `curl.txt` in that folder and paste your cURL response
 
 Garmin sessions don't last forever, so you may need to repeat these steps periodically. Now you can run the backfill for your desired metrics and date ranges.
 
-`garmin_backfill` supports the following metrics:
-- body battery: low, high
-- respiration: average sleep respiration
-- stress: overall, high, medium, low, rest
-- sleep: score, total sleep time, spO2, stages, resting HR, sleep need, sleep quality
-- weight: latest weight
+`garmin.go` supports the following metrics:
+- **body battery:** low, high
+- **respiration:** average sleep respiration
+- **stress:** overall, high, medium, low, rest
+- **sleep:** score, total sleep time, spO2, stages, resting HR, sleep need, sleep quality
+- **weight:** latest weight
 
 to run the backfill:
 ```
@@ -78,7 +78,7 @@ to run the backfill:
 - `to` the end date of your backfill
 - `athleteId` your intervals.icu athlete ID
 - `apiKey` your intervals.icu API key
-- `dry-run` will print the results to the terminal and not send any data to intervals
+- `dry-run` (optional) will print the results to the terminal and not send any data to intervals
 
 # building
 
