@@ -498,13 +498,18 @@ func garminSleepAccumulator(
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, s := range sleep {
 		quality := garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
+
+		// intervals doesn't allow a value of 0 for some attributes
+		spo2 := ptr.CoalesceFloat(s.Values.Spo2)
+		hrv := ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
+
 		if record, exists := records[s.Date]; exists {
 			record.SleepScore = ptr.Int(s.Values.SleepScore)
 			record.SleepSeconds = ptr.Int(s.Values.TotalSleepTimeSeconds)
 			record.SleepQuality = &quality
-			record.HrvRmssd = ptr.Float(s.Values.AverageOvernightHrv)
+			record.HrvRmssd = hrv
 			record.RestingHr = ptr.Int(s.Values.RestingHeartRate)
-			record.OxygenSaturation = ptr.Float(s.Values.Spo2)
+			record.OxygenSaturation = spo2
 			record.SleepNeedMinutes = ptr.Int(s.Values.SleepNeedMinutes)
 			record.SleepRemTimeSeconds = ptr.Int(s.Values.RemTimeSeconds)
 			record.SleepDeepTimeSeconds = ptr.Int(s.Values.DeepTimeSeconds)
@@ -517,9 +522,9 @@ func garminSleepAccumulator(
 				SleepScore:            ptr.Int(s.Values.SleepScore),
 				SleepSeconds:          ptr.Int(s.Values.TotalSleepTimeSeconds),
 				SleepQuality:          &quality,
-				HrvRmssd:              ptr.Float(s.Values.AverageOvernightHrv),
+				HrvRmssd:              hrv,
 				RestingHr:             ptr.Int(s.Values.RestingHeartRate),
-				OxygenSaturation:      ptr.Float(s.Values.Spo2),
+				OxygenSaturation:      spo2,
 				SleepNeedMinutes:      ptr.Int(s.Values.SleepNeedMinutes),
 				SleepRemTimeSeconds:   ptr.Int(s.Values.RemTimeSeconds),
 				SleepDeepTimeSeconds:  ptr.Int(s.Values.DeepTimeSeconds),
