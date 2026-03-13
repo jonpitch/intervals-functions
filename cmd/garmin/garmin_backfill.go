@@ -31,13 +31,6 @@ type LatestWeight struct {
 	Weight float64 `json:"weight"`
 }
 
-type WeightUnits int
-
-const (
-	Metric   WeightUnits = iota
-	Imperial             = iota
-)
-
 type SleepResponse struct {
 	IndividualStats []SleepEntry `json:"individualStats"`
 }
@@ -179,13 +172,12 @@ func main() {
 	toDateStr := flag.String("to", "", "last day of backfill (YYYY-MM-DD format)")
 	intervalsAthleteID := flag.String("athleteId", "", "intervals.icu athlete ID")
 	intervalsApiKey := flag.String("apiKey", "", "intervals.icu API key")
-	metric := flag.Bool("metric", false, "Use metric units (g, kg)")
 	dryRun := flag.Bool("dry-run", false, "Do not persist data to intervals.icu, just print")
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) != 1 {
-		log.Fatal("usage: garmin_backfill <garmin metrics> -from=X -to=Y -athleteId=A -apiKey=B --metric --dry-run")
+		log.Fatal("usage: garmin_backfill -from=X -to=Y -athleteId=A -apiKey=B --dry-run <garmin metrics>")
 	}
 
 	if intervalsApiKey == nil || intervalsAthleteID == nil {
@@ -291,19 +283,12 @@ func main() {
 	}
 
 	if fetchWeight {
-		var units WeightUnits
-		if metric != nil && *metric {
-			units = Metric
-		} else {
-			units = Imperial
-		}
-
 		records, err = getGarminOveralAndIndividualData(
 			garminRequest,
 			WeightURL,
 			records,
 			func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
-			garminWeightAccumulatorWithUnits(units),
+			garminWeightAccumulator,
 		)
 		if err != nil {
 			log.Fatal(err)
@@ -430,38 +415,27 @@ func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, 
 	return accumulate(data, wellness), nil
 }
 
-// garminWeightAccumulatorWithUnits converts WeightSummary records to intervals.WellnessRecord and accumulates
+// garminWeightAccumulator converts WeightSummary records to intervals.WellnessRecord and accumulates
 // them on the provided map
-func garminWeightAccumulatorWithUnits(units WeightUnits) func(
-	[]WeightSummary,
-	map[GarminDate]intervals.WellnessRecord,
+func garminWeightAccumulator(
+	weight []WeightSummary,
+	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
-	return func(
-		weight []WeightSummary,
-		records map[GarminDate]intervals.WellnessRecord,
-	) map[GarminDate]intervals.WellnessRecord {
-		for _, w := range weight {
-			val := w.LatestWeight.Weight
-			switch units {
-			case Metric:
-				val = val / 1000.0
-			case Imperial:
-				val = val / 16.0
-			}
-
-			if record, exists := records[w.SummaryDate]; exists {
-				record.Weight = ptr.Float(val)
-				records[w.SummaryDate] = record
-			} else {
-				records[w.SummaryDate] = intervals.WellnessRecord{
-					ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
-					Weight: ptr.Float(val),
-				}
+	for _, w := range weight {
+		weightInGrams := w.LatestWeight.Weight
+		weight := weightInGrams / 1000
+		if record, exists := records[w.SummaryDate]; exists {
+			record.Weight = ptr.Float(weight)
+			records[w.SummaryDate] = record
+		} else {
+			records[w.SummaryDate] = intervals.WellnessRecord{
+				ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
+				Weight: ptr.Float(weight),
 			}
 		}
-
-		return records
 	}
+
+	return records
 }
 
 // garminStressAccumulator converts StressEntry records to intervals.WellnessRecord and accumulates

@@ -71,14 +71,13 @@ Garmin sessions don't last forever, so you may need to repeat these steps period
 
 to run the backfill:
 ```
-./bin/garmin_backfill -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -metric -dry-run bodybattery,stress,respiration,sleep,weight
+./bin/garmin -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run bodybattery,stress,respiration,sleep,weight
 ```
 
 - `from` the starting date of your backfill
 - `to` the end date of your backfill
 - `athleteId` your intervals.icu athlete ID
 - `apiKey` your intervals.icu API key
-- `metric` if you want your weight units in metric
 - `dry-run` will print the results to the terminal and not send any data to intervals
 
 # building
@@ -100,3 +99,4 @@ mkdir -p bin && go get ./... && CGO_ENABLED=0 go build -o bin/ ./cmd/garmin
 - netlify functions run in UTC time.
 - garmin backfill works by leveraging the same requets the garmin connect web app uses. as such, this project is **for personal use only** and could break at any time.
 - spO2 has no 4 week window in Garmin Connect, and is not supported for backfill.
+- for weight: the garmin API and intervals are both in metric as far as I can tell. weight from garmin is reported in grams, and intervals is looking for the weight value in kilograms.
