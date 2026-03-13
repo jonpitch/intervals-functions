@@ -5,13 +5,10 @@ import (
 	"errors"
 	"fmt"
 	intervals "intervals-functions/api"
-	"intervals-functions/utils/calc"
 	"intervals-functions/utils/csv"
 	"intervals-functions/utils/format"
-	"intervals-functions/utils/ptr"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -95,38 +92,6 @@ func cronometerToIntervals() (int, error) {
 		format.FloatPtr(totals.Fat),
 	)
 
-	// get biometrics info for yesterday
-	// NOTE: intervals.icu garmin sync does not include oxygen saturation or respiration rate.
-	// the garmin sync with cronometer does include this data, but it's a series rather than a single metric.
-	// this will be removed if intervals.icu adds support for spo2 or respiration in its native sync.
-	rawBiometrics, err := cronometer.ExportBiometrics(context.Background(), dateRange.Start, dateRange.End)
-	if err != nil {
-		return 500, err
-	}
-
-	biometrics, err := gocronometer.ParseBiometricRecordsExport(strings.NewReader(rawBiometrics), nil)
-	if err != nil {
-		return 500, err
-	}
-
-	spo2 := []float64{}
-	respiration := []float64{}
-	for _, b := range biometrics {
-		switch b.Metric {
-		case "Oxygen Saturation (SPO2) (Garmin)":
-			spo2 = append(spo2, b.Amount)
-		case "Respiration Rate (Garmin)":
-			respiration = append(respiration, b.Amount)
-		}
-	}
-
-	avgSpo2 := calc.Average(spo2)
-	roundedSpo2 := calc.RoundToTenth(avgSpo2)
-
-	avgRespiration := calc.Average(respiration)
-	roundedRespiration := calc.RoundToTenth(avgRespiration)
-	fmt.Printf("average spo2: %.1f - average respiration: %.1f\n", roundedSpo2, roundedRespiration)
-
 	fmt.Printf("get intervals wellness record for %v\n", dateRange.Start.Format("2006-01-02"))
 	intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, intervalsApiKey, intervalsAthleteID)
 	wellness, err := intervalsClient.GetWellnessRecord(dateRange.Start)
@@ -136,13 +101,11 @@ func cronometerToIntervals() (int, error) {
 
 	fmt.Println("updating intervals wellness record...")
 	err = intervalsClient.UpdateWellnessRecord(intervals.WellnessRecord{
-		ID:               wellness.ID,
-		KCalConsumed:     totals.Kcal,
-		Carbohydrates:    totals.Carbs,
-		Protein:          totals.Protein,
-		Fat:              totals.Fat,
-		OxygenSaturation: ptr.Float(roundedSpo2),
-		Respiration:      ptr.Float(roundedRespiration),
+		ID:            wellness.ID,
+		KCalConsumed:  totals.Kcal,
+		Carbohydrates: totals.Carbs,
+		Protein:       totals.Protein,
+		Fat:           totals.Fat,
 	})
 
 	if err != nil {

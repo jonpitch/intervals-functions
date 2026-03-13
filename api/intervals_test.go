@@ -97,3 +97,46 @@ func TestUpdateWellnessRecord(t *testing.T) {
 	assert.Equal(t, "Basic "+auth, ExpectedAuth)
 	assert.Equal(t, wellness, ExpectedBody)
 }
+
+func TestUpdateWellnessRecordBulk(t *testing.T) {
+	var (
+		ExpectedMethod string
+		ExpectedPath   string
+		ExpectedAuth   string
+		ExpectedBody   []WellnessRecord
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ExpectedMethod = r.Method
+		ExpectedPath = r.URL.Path
+		ExpectedAuth = r.Header.Get("Authorization")
+		defer r.Body.Close()
+		_ = json.NewDecoder(r.Body).Decode(&ExpectedBody)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	wellness := []WellnessRecord{
+		{
+			ID:             WellnessRecordID("666"),
+			BodyBatteryMin: ptr.Int(30),
+			BodyBatterMax:  ptr.Int(90),
+		}, {
+			ID:             WellnessRecordID("777"),
+			BodyBatteryMin: ptr.Int(40),
+			BodyBatterMax:  ptr.Int(100),
+		}}
+
+	athleteID := "i1234"
+	apiKey := "xyz999"
+	auth := base64.StdEncoding.EncodeToString([]byte("API_KEY:" + apiKey))
+
+	client := IntervalsClient{server.URL, apiKey, athleteID}
+	err := client.BulkUpdateWellnessRecord(wellness)
+	assert.NoError(t, err)
+	assert.Equal(t, http.MethodPut, ExpectedMethod)
+	assert.Equal(t, "/athlete/"+athleteID+"/wellness-bulk", ExpectedPath)
+	assert.Equal(t, "Basic "+auth, ExpectedAuth)
+	assert.Equal(t, wellness, ExpectedBody)
+}

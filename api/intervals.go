@@ -32,7 +32,45 @@ type WellnessRecord struct {
 	Fat              *float64         `json:"fatTotal"`
 	OxygenSaturation *float64         `json:"spO2"`
 	Respiration      *float64         `json:"respiration"`
+	Stress           *StressLevel     `json:"stress"`
+	SleepScore       *int             `json:"sleepScore"`
+	SleepSeconds     *int             `json:"sleepSecs"`
+	SleepQuality     *SleepQuality    `json:"sleepQuality"`
+	HrvRmssd         *float64         `json:"hrv"`
+	RestingHr        *int             `json:"restingHR"`
+	Weight           *float64         `json:"weight"` // stored in user's measurement preference (kg, lbs)
+
+	// custom attributes
+	BodyBatteryMin        *int `json:"BodyBatteryMin"`
+	BodyBatterMax         *int `json:"BodyBatteryMax"`
+	RestStressSeconds     *int `json:"StressRestSeconds"`
+	LowStressSeconds      *int `json:"StressLowSeconds"`
+	MediumStressSeconds   *int `json:"StressMediumSeconds"`
+	HighStressSeconds     *int `json:"StressHighSeconds"`
+	SleepNeedMinutes      *int `json:"SleepNeedMinutes"`
+	SleepRemTimeSeconds   *int `json:"SleepRemSeconds"`
+	SleepDeepTimeSeconds  *int `json:"SleepDeepSeconds"`
+	SleepLightTimeSeconds *int `json:"SleepLightSeconds"`
+	SleepAwakeTimeSeconds *int `json:"SleepAwakeSeconds"`
 }
+
+type StressLevel int
+
+const (
+	LowStress     StressLevel = 1
+	AvgStress     StressLevel = 2
+	HighStress    StressLevel = 3
+	ExtremeStress StressLevel = 4
+)
+
+type SleepQuality int
+
+const (
+	GreatSleepQuality   SleepQuality = 1
+	GoodSleepQuality    SleepQuality = 2
+	AverageSleepQuality SleepQuality = 3
+	PoorSleepQuality    SleepQuality = 4
+)
 
 // GetWellnessRecord sends a GET request to
 //
@@ -79,6 +117,32 @@ func (c IntervalsClient) UpdateWellnessRecord(wellness WellnessRecord) error {
 	resp, err := put(url, c.apiKey, body)
 	if err != nil {
 		return fmt.Errorf("update wellness record error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("intervals.icu API returned status %s", resp.Status)
+	}
+
+	return nil
+}
+
+// BulkUpdateWellnessRecord allows for the update of multiple wellness record updates in 1 request
+//
+//	https://intervals.icu/api/v1/athlete/{id}/wellness-bulk
+//
+// api documentation: https://intervals.icu/api-docs.html#put-/api/v1/athlete/-id-/wellness-bulk
+func (c IntervalsClient) BulkUpdateWellnessRecord(wellness []WellnessRecord) error {
+	url := fmt.Sprintf(c.url+"/athlete/%s/wellness-bulk", c.athleteID)
+
+	body, err := json.Marshal(wellness)
+	if err != nil {
+		return fmt.Errorf("marshal wellness payload: %w", err)
+	}
+
+	resp, err := put(url, c.apiKey, body)
+	if err != nil {
+		return fmt.Errorf("bulk update wellness records error: %w", err)
 	}
 	defer resp.Body.Close()
 
