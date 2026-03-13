@@ -99,7 +99,7 @@ func main() {
 		fmt.Println("updating intervals wellness record...")
 		err = intervalsClient.UpdateWellnessRecord(intervals.WellnessRecord{
 			ID:            wellness.ID,
-			KCalConsumed:  totals.Kcal,
+			KCalConsumed:  totals.Kcal, // coalesce
 			Carbohydrates: totals.Carbs,
 			Protein:       totals.Protein,
 			Fat:           totals.Fat,

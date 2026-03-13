@@ -430,7 +430,7 @@ func garminWeightAccumulator(
 		} else {
 			records[w.SummaryDate] = intervals.WellnessRecord{
 				ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
-				Weight: ptr.Float(weight),
+				Weight: ptr.CoalesceFloat(weight),
 			}
 		}
 	}
@@ -482,7 +482,7 @@ func garminRespirationAccumulator(
 		} else {
 			records[b.Date] = intervals.WellnessRecord{
 				ID:          intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-				Respiration: ptr.Float(b.AverageSleepRespiration),
+				Respiration: ptr.CoalesceFloat(b.AverageSleepRespiration),
 			}
 		}
 	}
@@ -497,19 +497,13 @@ func garminSleepAccumulator(
 	records map[GarminDate]intervals.WellnessRecord,
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, s := range sleep {
-		quality := garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
-
-		// intervals doesn't allow a value of 0 for some attributes
-		spo2 := ptr.CoalesceFloat(s.Values.Spo2)
-		hrv := ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
-
 		if record, exists := records[s.Date]; exists {
 			record.SleepScore = ptr.Int(s.Values.SleepScore)
 			record.SleepSeconds = ptr.Int(s.Values.TotalSleepTimeSeconds)
-			record.SleepQuality = &quality
-			record.HrvRmssd = hrv
+			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
+			record.HrvRmssd = ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
 			record.RestingHr = ptr.Int(s.Values.RestingHeartRate)
-			record.OxygenSaturation = spo2
+			record.OxygenSaturation = ptr.CoalesceFloat(s.Values.Spo2)
 			record.SleepNeedMinutes = ptr.Int(s.Values.SleepNeedMinutes)
 			record.SleepRemTimeSeconds = ptr.Int(s.Values.RemTimeSeconds)
 			record.SleepDeepTimeSeconds = ptr.Int(s.Values.DeepTimeSeconds)
@@ -521,10 +515,10 @@ func garminSleepAccumulator(
 				ID:                    intervals.WellnessRecordID(s.Date.Format("2006-01-02")),
 				SleepScore:            ptr.Int(s.Values.SleepScore),
 				SleepSeconds:          ptr.Int(s.Values.TotalSleepTimeSeconds),
-				SleepQuality:          &quality,
-				HrvRmssd:              hrv,
-				RestingHr:             ptr.Int(s.Values.RestingHeartRate),
-				OxygenSaturation:      spo2,
+				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality),
+				HrvRmssd:              ptr.CoalesceFloat(s.Values.AverageOvernightHrv),
+				RestingHr:             ptr.CoalesceInt(s.Values.RestingHeartRate),
+				OxygenSaturation:      ptr.CoalesceFloat(s.Values.Spo2),
 				SleepNeedMinutes:      ptr.Int(s.Values.SleepNeedMinutes),
 				SleepRemTimeSeconds:   ptr.Int(s.Values.RemTimeSeconds),
 				SleepDeepTimeSeconds:  ptr.Int(s.Values.DeepTimeSeconds),
@@ -657,16 +651,23 @@ func garminStressToIntervalsStress(stress int) intervals.StressLevel {
 }
 
 // garminSleepQualityToIntervalsSleepQuality maps a garmin sleep quality string to intervals sleep quality value
-func garminSleepQualityToIntervalsSleepQuality(q GarminSleepQuality) intervals.SleepQuality {
+func garminSleepQualityToIntervalsSleepQuality(q GarminSleepQuality) *intervals.SleepQuality {
+	var quality *intervals.SleepQuality
 	switch q {
 	case Excellent:
-		return intervals.GreatSleepQuality
+		quality := intervals.GreatSleepQuality
+		return &quality
 	case Good:
-		return intervals.GoodSleepQuality
+		quality := intervals.GoodSleepQuality
+		return &quality
 	case Fair:
-		return intervals.AverageSleepQuality
+		quality := intervals.AverageSleepQuality
+		return &quality
+	case Poor:
+		quality := intervals.PoorSleepQuality
+		return &quality
 	default:
-		return intervals.PoorSleepQuality
+		return quality
 	}
 }
 

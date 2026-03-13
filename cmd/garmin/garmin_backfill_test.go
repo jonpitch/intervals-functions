@@ -733,14 +733,20 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 }
 
 func TestGarminSleepQualityToIntervals(t *testing.T) {
+	great := intervals.GreatSleepQuality
+	good := intervals.GoodSleepQuality
+	average := intervals.AverageSleepQuality
+	poor := intervals.PoorSleepQuality
+
 	cases := []struct {
 		Garmin   GarminSleepQuality
-		Expected intervals.SleepQuality
+		Expected *intervals.SleepQuality
 	}{
-		{Garmin: Excellent, Expected: intervals.GreatSleepQuality},
-		{Garmin: Good, Expected: intervals.GoodSleepQuality},
-		{Garmin: Fair, Expected: intervals.AverageSleepQuality},
-		{Garmin: Poor, Expected: intervals.PoorSleepQuality},
+		{Garmin: Excellent, Expected: &great},
+		{Garmin: Good, Expected: &good},
+		{Garmin: Fair, Expected: &average},
+		{Garmin: Poor, Expected: &poor},
+		{Garmin: "", Expected: nil},
 	}
 
 	for _, c := range cases {
