@@ -33,7 +33,7 @@ type WellnessRecord struct {
 	OxygenSaturation *float64         `json:"spO2"`
 	Respiration      *float64         `json:"respiration"`
 	Stress           *StressLevel     `json:"stress"`
-	SleepScore       *int             `json:"sleepScore"`
+	SleepScore       *float64         `json:"sleepScore"`
 	SleepSeconds     *int             `json:"sleepSecs"`
 	SleepQuality     *SleepQuality    `json:"sleepQuality"`
 	HrvRmssd         *float64         `json:"hrv"`

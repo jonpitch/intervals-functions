@@ -60,7 +60,7 @@ type SleepValue struct {
 	LightTimeSeconds      int                `json:"lightTime"`
 	AverageOvernightHrv   float64            `json:"avgOvernightHrv"`
 	SleepNeedMinutes      int                `json:"sleepNeed"`
-	SleepScore            int                `json:"sleepScore"`
+	SleepScore            float64            `json:"sleepScore"`
 }
 
 type RespirationEntry struct {
@@ -498,7 +498,7 @@ func garminSleepAccumulator(
 ) map[GarminDate]intervals.WellnessRecord {
 	for _, s := range sleep {
 		if record, exists := records[s.Date]; exists {
-			record.SleepScore = ptr.Int(s.Values.SleepScore)
+			record.SleepScore = ptr.Float(s.Values.SleepScore)
 			record.SleepSeconds = ptr.Int(s.Values.TotalSleepTimeSeconds)
 			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
 			record.HrvRmssd = ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
@@ -513,7 +513,7 @@ func garminSleepAccumulator(
 		} else {
 			records[s.Date] = intervals.WellnessRecord{
 				ID:                    intervals.WellnessRecordID(s.Date.Format("2006-01-02")),
-				SleepScore:            ptr.Int(s.Values.SleepScore),
+				SleepScore:            ptr.Float(s.Values.SleepScore),
 				SleepSeconds:          ptr.Int(s.Values.TotalSleepTimeSeconds),
 				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality),
 				HrvRmssd:              ptr.CoalesceFloat(s.Values.AverageOvernightHrv),
