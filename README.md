@@ -36,7 +36,7 @@ intervals provides a garmin sync natively, which will sync a lot of data from ga
 
 ### usage
 
-before backfilling any data, there is some required setup in intervals. the following wellness fields need to exist order to have a destination for garmin data:
+before backfilling any data, there is some required setup in intervals. the following wellness fields need to exist in order to have a destination for garmin data:
 - `BodyBatteryMin`
 - `BodyBatteryMax`
 - `StressRestSeconds`
