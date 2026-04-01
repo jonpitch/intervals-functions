@@ -82,14 +82,13 @@ to run the backfill:
 
 # building
 
-garmin:
-```
-mkdir -p bin && go get ./... && CGO_ENABLED=0 go build -o bin/ ./cmd/garmin
-```
+`make build`
+
+for the release binary: `make release`
 
 # testing
 
-`go test ./...`
+`make test`
 
 # notes
 
