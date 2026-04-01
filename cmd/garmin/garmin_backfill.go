@@ -140,16 +140,19 @@ type GarminArrayResponseData interface {
 }
 
 type GarminRequest struct {
-	Csrf        string
-	Cookie      string
+	Headers     map[string]string
 	FromDateStr string
 	ToDateStr   string
 }
 
-func NewGarminRequest(csrf string, cookie string, fromDateStr string, toDateString string) GarminRequest {
+// NewGarminRequest copies parsed cURL headers and applies defaults needed for Garmin API requests.
+func NewGarminRequest(headers map[string]string, fromDateStr string, toDateString string) GarminRequest {
+	h := make(map[string]string, len(headers)+1)
+	for k, v := range headers {
+		h[k] = v
+	}
 	return GarminRequest{
-		Csrf:        csrf,
-		Cookie:      cookie,
+		Headers:     h,
 		FromDateStr: fromDateStr,
 		ToDateStr:   toDateString,
 	}
@@ -223,7 +226,7 @@ func main() {
 		}
 	}
 
-	csrf, cookie, err := getGarminHeaders(curlContents)
+	headers, err := getGarminHeaders(curlContents)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -231,7 +234,7 @@ func main() {
 	records := map[GarminDate]intervals.WellnessRecord{}
 
 	// accumulate all wellness data before updating in intervals
-	garminRequest := NewGarminRequest(csrf, cookie, *fromDateStr, *toDateStr)
+	garminRequest := NewGarminRequest(headers, *fromDateStr, *toDateStr)
 
 	if fetchBodyBattery {
 		records, err = getGarminArrayData(
@@ -333,25 +336,9 @@ func getGarminArrayData[T GarminArrayResponseData](
 	}
 
 	var data []T
-	var request *http.Request
-	client := &http.Client{}
 	for _, url := range urls {
 		log.Printf("[%s] fetching %s...\n", garminApiToLabel(endpoint), url)
-		request, err = http.NewRequest("GET", url, nil)
-		if err != nil {
-			return wellness, err
-		}
-
-		// TODO just take all headers from cURL request
-		request.Header.Set("connect-csrf-token", r.Csrf)
-		request.Header.Set("cookie", r.Cookie)
-		request.Header.Set("sec-fetch-site", "same-origin")
-		resp, err := client.Do(request)
-		if err != nil {
-			return wellness, err
-		}
-		defer resp.Body.Close()
-		bodyText, err := io.ReadAll(resp.Body)
+		bodyText, err := garminFetchGET(url, r)
 		if err != nil {
 			return wellness, err
 		}
@@ -384,25 +371,9 @@ func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, 
 	}
 
 	var data []E
-	var request *http.Request
-	client := &http.Client{}
 	for _, url := range urls {
 		log.Printf("[%s] fetching %s...\n", garminApiToLabel(endpoint), url)
-		request, err = http.NewRequest("GET", url, nil)
-		if err != nil {
-			return wellness, err
-		}
-
-		// TODO all headers
-		request.Header.Set("connect-csrf-token", r.Csrf)
-		request.Header.Set("cookie", r.Cookie)
-		request.Header.Set("sec-fetch-site", "same-origin")
-		resp, err := client.Do(request)
-		if err != nil {
-			return wellness, err
-		}
-		defer resp.Body.Close()
-		bodyText, err := io.ReadAll(resp.Body)
+		bodyText, err := garminFetchGET(url, r)
 		if err != nil {
 			return wellness, err
 		}
@@ -558,33 +529,57 @@ func garminBodyBatteryAccumulator(
 	return records
 }
 
-// getGarminHeaders pulls just the minimum required values from a garmin connect cURL request
-func getGarminHeaders(fileContents []byte) (csrfToken string, cookie string, err error) {
+// garminFetchGET performs a GET with the headers from r (including defaults from NewGarminRequest).
+func garminFetchGET(url string, r GarminRequest) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range r.Headers {
+		req.Header.Set(k, v)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+// getGarminHeaders parses -H 'name: value' lines and -b cookie from a garmin connect cURL request.
+// Header names are canonicalized; the cookie from -b is stored under the Cookie key.
+func getGarminHeaders(fileContents []byte) (map[string]string, error) {
+	headers := make(map[string]string)
 	lines := strings.SplitSeq(string(fileContents), "\n")
 	for line := range lines {
 		line = strings.TrimSpace(line)
 
-		// Header form: -H 'connect-csrf-token: <value>' \
-		if strings.HasPrefix(line, "-H 'connect-csrf-token:") {
-			line = strings.TrimPrefix(line, "-H ")
-			line = strings.Trim(line, `'" \`)
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				csrfToken = strings.TrimSpace(parts[1])
+		if strings.HasPrefix(line, "-H ") {
+			rest := strings.TrimPrefix(line, "-H ")
+			rest = strings.Trim(rest, `'" \`)
+			parts := strings.SplitN(rest, ":", 2)
+			if len(parts) != 2 {
+				continue
 			}
+			name := http.CanonicalHeaderKey(strings.TrimSpace(parts[0]))
+			value := strings.TrimSpace(parts[1])
+			headers[name] = value
 		}
 
 		if after, ok := strings.CutPrefix(line, "-b "); ok {
-			cookie = after
-			cookie = strings.Trim(cookie, `'" \`)
+			cookie := strings.Trim(after, `'" \`)
+			headers[http.CanonicalHeaderKey("cookie")] = cookie
 		}
 	}
 
-	if csrfToken == "" || cookie == "" {
-		return "", "", errors.New("failed to find csrf token or cookie")
+	csrf := headers[http.CanonicalHeaderKey("connect-csrf-token")]
+	cookie := headers[http.CanonicalHeaderKey("cookie")]
+	if csrf == "" || cookie == "" {
+		return nil, errors.New("failed to find csrf token or cookie")
 	}
 
-	return csrfToken, cookie, nil
+	return headers, nil
 }
 
 // buildGarminURLs will build the Garmin API URL for a specific date range

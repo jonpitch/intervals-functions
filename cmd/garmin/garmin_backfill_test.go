@@ -4,21 +4,21 @@ import (
 	"fmt"
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/ptr"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGarmingHeaders_NoneFound(t *testing.T) {
+func TestGarminHeaders_NoneFound(t *testing.T) {
 	curl := `curl 'some-url' \
 	-H 'accept: */*' \
 	-H 'user-agent: something-wild'`
 
-	csrf, cookie, err := getGarminHeaders([]byte(curl))
+	headers, err := getGarminHeaders([]byte(curl))
 	assert.Error(t, err)
-	assert.Equal(t, "", csrf)
-	assert.Equal(t, "", cookie)
+	assert.Nil(t, headers)
 }
 
 func TestGarminHeaders_OneFound(t *testing.T) {
@@ -27,10 +27,9 @@ func TestGarminHeaders_OneFound(t *testing.T) {
 	-H 'user-agent: something-wild' \
 	-H 'connect-csrf-token: abc123'`
 
-	csrf, cookie, err := getGarminHeaders([]byte(curl))
+	headers, err := getGarminHeaders([]byte(curl))
 	assert.Error(t, err)
-	assert.Equal(t, "", csrf)
-	assert.Equal(t, "", cookie)
+	assert.Nil(t, headers)
 }
 
 func TestGarminHeaders(t *testing.T) {
@@ -40,10 +39,12 @@ func TestGarminHeaders(t *testing.T) {
 	-H 'connect-csrf-token: abc123' \
 	-b 'a_whole_bunch_of_nonsense'`
 
-	csrf, cookie, err := getGarminHeaders([]byte(curl))
+	headers, err := getGarminHeaders([]byte(curl))
 	assert.NoError(t, err)
-	assert.Equal(t, "abc123", csrf)
-	assert.Equal(t, "a_whole_bunch_of_nonsense", cookie)
+	assert.Equal(t, "abc123", headers[http.CanonicalHeaderKey("connect-csrf-token")])
+	assert.Equal(t, "a_whole_bunch_of_nonsense", headers[http.CanonicalHeaderKey("cookie")])
+	assert.Equal(t, "*/*", headers[http.CanonicalHeaderKey("accept")])
+	assert.Equal(t, "something-wild", headers[http.CanonicalHeaderKey("user-agent")])
 }
 
 func TestGarminUrls_ErrorHandling(t *testing.T) {
