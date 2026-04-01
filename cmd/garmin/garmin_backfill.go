@@ -342,8 +342,10 @@ func getGarminArrayData[T GarminArrayResponseData](
 			return wellness, err
 		}
 
+		// TODO just take all headers from cURL request
 		request.Header.Set("connect-csrf-token", r.Csrf)
 		request.Header.Set("cookie", r.Cookie)
+		request.Header.Set("sec-fetch-site", "same-origin")
 		resp, err := client.Do(request)
 		if err != nil {
 			return wellness, err
@@ -391,8 +393,10 @@ func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, 
 			return wellness, err
 		}
 
+		// TODO all headers
 		request.Header.Set("connect-csrf-token", r.Csrf)
 		request.Header.Set("cookie", r.Cookie)
+		request.Header.Set("sec-fetch-site", "same-origin")
 		resp, err := client.Do(request)
 		if err != nil {
 			return wellness, err

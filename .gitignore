@@ -3,3 +3,4 @@ functions/*
 .netlify
 cmd/garmin/request/*
 bin/request/*
+*.DS_Store
