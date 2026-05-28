@@ -24,34 +24,36 @@ func NewIntervalsClient(url string, apiKey string, athleteID string) IntervalsCl
 
 type WellnessRecordID string
 
+// Optional fields use omitempty so nil pointers are omitted from JSON. Without it, they marshal as
+// null and the intervals.icu API treats null as clearing the attribute (problematic for partial updates).
 type WellnessRecord struct {
 	ID               WellnessRecordID `json:"id"`
-	KCalConsumed     *float64         `json:"kcalConsumed"`
-	Carbohydrates    *float64         `json:"carbohydrates"`
-	Protein          *float64         `json:"protein"`
-	Fat              *float64         `json:"fatTotal"`
-	OxygenSaturation *float64         `json:"spO2"`
-	Respiration      *float64         `json:"respiration"`
-	Stress           *StressLevel     `json:"stress"`
-	SleepScore       *float64         `json:"sleepScore"`
-	SleepSeconds     *int             `json:"sleepSecs"`
-	SleepQuality     *SleepQuality    `json:"sleepQuality"`
-	HrvRmssd         *float64         `json:"hrv"`
-	RestingHr        *int             `json:"restingHR"`
-	Weight           *float64         `json:"weight"` // stored in user's measurement preference (kg, lbs)
+	KCalConsumed     *float64         `json:"kcalConsumed,omitempty"`
+	Carbohydrates    *float64         `json:"carbohydrates,omitempty"`
+	Protein          *float64         `json:"protein,omitempty"`
+	Fat              *float64         `json:"fatTotal,omitempty"`
+	OxygenSaturation *float64         `json:"spO2,omitempty"`
+	Respiration      *float64         `json:"respiration,omitempty"`
+	Stress           *StressLevel     `json:"stress,omitempty"`
+	SleepScore       *float64         `json:"sleepScore,omitempty"`
+	SleepSeconds     *int             `json:"sleepSecs,omitempty"`
+	SleepQuality     *SleepQuality    `json:"sleepQuality,omitempty"`
+	HrvRmssd         *float64         `json:"hrv,omitempty"`
+	RestingHr        *int             `json:"restingHR,omitempty"`
+	Weight           *float64         `json:"weight,omitempty"` // stored in user's measurement preference (kg, lbs)
 
 	// custom attributes
-	BodyBatteryMin        *int `json:"BodyBatteryMin"`
-	BodyBatterMax         *int `json:"BodyBatteryMax"`
-	RestStressSeconds     *int `json:"StressRestSeconds"`
-	LowStressSeconds      *int `json:"StressLowSeconds"`
-	MediumStressSeconds   *int `json:"StressMediumSeconds"`
-	HighStressSeconds     *int `json:"StressHighSeconds"`
-	SleepNeedMinutes      *int `json:"SleepNeedMinutes"`
-	SleepRemTimeSeconds   *int `json:"SleepRemSeconds"`
-	SleepDeepTimeSeconds  *int `json:"SleepDeepSeconds"`
-	SleepLightTimeSeconds *int `json:"SleepLightSeconds"`
-	SleepAwakeTimeSeconds *int `json:"SleepAwakeSeconds"`
+	BodyBatteryMin        *int `json:"BodyBatteryMin,omitempty"`
+	BodyBatterMax         *int `json:"BodyBatteryMax,omitempty"`
+	RestStressSeconds     *int `json:"StressRestSeconds,omitempty"`
+	LowStressSeconds      *int `json:"StressLowSeconds,omitempty"`
+	MediumStressSeconds   *int `json:"StressMediumSeconds,omitempty"`
+	HighStressSeconds     *int `json:"StressHighSeconds,omitempty"`
+	SleepNeedMinutes      *int `json:"SleepNeedMinutes,omitempty"`
+	SleepRemTimeSeconds   *int `json:"SleepRemSeconds,omitempty"`
+	SleepDeepTimeSeconds  *int `json:"SleepDeepSeconds,omitempty"`
+	SleepLightTimeSeconds *int `json:"SleepLightSeconds,omitempty"`
+	SleepAwakeTimeSeconds *int `json:"SleepAwakeSeconds,omitempty"`
 }
 
 type StressLevel int
