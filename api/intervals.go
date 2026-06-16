@@ -74,6 +74,42 @@ const (
 	PoorSleepQuality    SleepQuality = 4
 )
 
+type Activity struct {
+	ID                        string  `json:"id"`
+	Type                      string  `json:"type"`
+	Date                      string  `json:"start_date_local"`
+	TrainingLoad              int     `json:"icu_training_load"`
+	Atl                       float64 `json:"icu_atl"`
+	Ctl                       float64 `json:"icu_ctl"`
+	ElapsedTime               int     `json:"elapsed_time"`
+	Name                      string  `json:"name"`
+	AverageTemp               float64 `json:"average_temp"`
+	MinTemp                   int     `json:"min_temp"`
+	MaxTemp                   int     `json:"max_temp"`
+	Rpe                       int     `json:"icu_rpe"` // user supplied rpe
+	KgLifted                  float64 `json:"kg_lifted"`
+	Decoupling                float64 `json:"decoupling"`
+	PowerLoad                 int     `json:"power_load"`
+	HrLoad                    int     `json:"hr_load"`
+	PaceLoad                  int     `json:"pace_load"`
+	SessionRpe                int     `json:"session_rpe"` // rpe x session load
+	Distance                  float64 `json:"distance"`
+	LactateThresholdHeartRate int     `json:"lthr"`
+	RollingFtp                int     `json:"icu_rolling_ftp"` // eFTP
+	Ftp                       int     `json:"icu_ftp"`         // user ftp
+
+	// TODO get some concept of FTP, thresholds, etc. for comparison?
+}
+
+type Event struct {
+	ID          int    `json:"id"`
+	Date        string `json:"start_date_local"`
+	Type        string `json:"type"`     // enum
+	Category    string `json:"category"` // enum
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 // GetWellnessRecord sends a GET request to
 //
 //	https://intervals.icu/api/v1/athlete/{id}/wellness/{date}
@@ -153,6 +189,110 @@ func (c IntervalsClient) BulkUpdateWellnessRecord(wellness []WellnessRecord) err
 	}
 
 	return nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/wellness-ext-
+func (c IntervalsClient) ListWellnessRecordsForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]WellnessRecord, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/wellness?oldest=%s&newest=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("list wellness records error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("read response body failed: %w", err)
+	}
+
+	var wellness []WellnessRecord
+	err = json.Unmarshal(body, &wellness)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("unmarshal wellness records response body failed: %w", err)
+	}
+
+	return wellness, nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/activities
+func (c IntervalsClient) ListActivitiesForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]Activity, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/activities?oldest=%s&newest=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("list activities error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("read activities body failed: %w", err)
+	}
+
+	var activities []Activity
+	err = json.Unmarshal(body, &activities)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("unmarshal activities response body failed: %w", err)
+	}
+
+	return activities, nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/events-format-
+func (c IntervalsClient) ListEventsForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]Event, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/events?oldest=%s&newest=%s&category=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+		// TODO params?
+		"NOTE,RACE_A,RACE_B,RACE_C,SEASON_START,HOLIDAY,SICK,INJURED",
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []Event{}, fmt.Errorf("list events error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []Event{}, fmt.Errorf("read events body failed: %w", err)
+	}
+
+	var events []Event
+	err = json.Unmarshal(body, &events)
+	if err != nil {
+		return []Event{}, fmt.Errorf("unmarshal events response body failed: %w", err)
+	}
+
+	return events, nil
 }
 
 // get sends a GET request to the given url
