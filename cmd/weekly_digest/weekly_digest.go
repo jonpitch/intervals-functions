@@ -27,6 +27,9 @@ func main() {
 		intervalsAthleteID,
 	)
 
+	// future features:
+	// - quarterly digest
+	// - annual digest / compare data year-over-year
 	today := time.Now()
 	oneMonthAgo := time.Now().AddDate(0, -1, 0)
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(oneMonthAgo, today)
@@ -41,6 +44,7 @@ func main() {
 
 	fmt.Println(string(wellnessJson))
 
+	// get input for claude: wellness, activities, events
 	activities, err := intervalsClient.ListActivitiesForDateRange(oneMonthAgo, today)
 	if err != nil {
 		log.Fatal(err)
@@ -66,9 +70,25 @@ func main() {
 	fmt.Println(string(eventsJson))
 
 	// make claude API request, need claude prompt and data as strings?
-	// add note to intervals with claude response
 
-	// future features:
-	// - quarterly digest
-	// - annual digest / compare data year-over-year
+	// add note for athlete
+	err = intervalsClient.CreateEvent(intervals.Event{
+		Date:     today.Format("2006-01-02T00:00:00"),
+		Name:     "test note",
+		Category: "NOTE", // TODO enum
+		Description: `
+# here is some markdown
+
+let's **see** how *the* formatting goes
+
+- one
+- two
+`,
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("complete")
 }

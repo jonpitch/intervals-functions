@@ -271,7 +271,7 @@ func (c IntervalsClient) ListEventsForDateRange(
 		c.athleteID,
 		oldestStr,
 		newestStr,
-		// TODO params?
+		// TODO params? enum?
 		"NOTE,RACE_A,RACE_B,RACE_C,SEASON_START,HOLIDAY,SICK,INJURED",
 	)
 
@@ -295,9 +295,47 @@ func (c IntervalsClient) ListEventsForDateRange(
 	return events, nil
 }
 
+// https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
+func (c IntervalsClient) CreateEvent(event Event) error {
+	url := fmt.Sprintf(c.url+"/athlete/%s/events", c.athleteID)
+
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal event payload: %w", err)
+	}
+
+	resp, err := post(url, c.apiKey, body)
+	if err != nil {
+		return fmt.Errorf("create event record error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("intervals.icu API returned status %s", resp.Status)
+	}
+
+	return nil
+}
+
 // get sends a GET request to the given url
 func get(url string, apiKey string) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("API_KEY", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// put sends a POST request to the given url with the given api key and body
+func post(url string, apiKey string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
