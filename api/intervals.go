@@ -2,6 +2,7 @@ package intervals
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +43,14 @@ type WellnessRecord struct {
 	RestingHr        *int             `json:"restingHR,omitempty"`
 	Weight           *float64         `json:"weight,omitempty"` // stored in user's measurement preference (kg, lbs)
 
+	// user subjective attributes
+	// currently only used for weekly digest, so no enums needed
+	Soreness   *int `json:"soreness,omitempty"`
+	Fatigue    *int `json:"fatigue,omitempty"`
+	Mood       *int `json:"mood,omitempty"`
+	Motivation *int `json:"motivation,omitempty"`
+	Injury     *int `json:"injury,omitempty"`
+
 	// custom attributes
 	BodyBatteryMin        *int `json:"BodyBatteryMin,omitempty"`
 	BodyBatterMax         *int `json:"BodyBatteryMax,omitempty"`
@@ -75,30 +84,22 @@ const (
 )
 
 type Activity struct {
-	ID                        string  `json:"id"`
-	Type                      string  `json:"type"`
-	Date                      string  `json:"start_date_local"`
-	TrainingLoad              int     `json:"icu_training_load"`
-	Atl                       float64 `json:"icu_atl"`
-	Ctl                       float64 `json:"icu_ctl"`
-	ElapsedTime               int     `json:"elapsed_time"`
-	Name                      string  `json:"name"`
-	AverageTemp               float64 `json:"average_temp"`
-	MinTemp                   int     `json:"min_temp"`
-	MaxTemp                   int     `json:"max_temp"`
-	Rpe                       int     `json:"icu_rpe"` // user supplied rpe
-	KgLifted                  float64 `json:"kg_lifted"`
-	Decoupling                float64 `json:"decoupling"`
-	PowerLoad                 int     `json:"power_load"`
-	HrLoad                    int     `json:"hr_load"`
-	PaceLoad                  int     `json:"pace_load"`
-	SessionRpe                int     `json:"session_rpe"` // rpe x session load
-	Distance                  float64 `json:"distance"`
-	LactateThresholdHeartRate int     `json:"lthr"`
-	RollingFtp                int     `json:"icu_rolling_ftp"` // eFTP
-	Ftp                       int     `json:"icu_ftp"`         // user ftp
-
-	// TODO get some concept of FTP, thresholds, etc. for comparison?
+	ID           string  `json:"id"`
+	Type         string  `json:"type"`
+	Date         string  `json:"start_date_local"`
+	TrainingLoad int     `json:"icu_training_load"`
+	Atl          float64 `json:"icu_atl"`
+	Ctl          float64 `json:"icu_ctl"`
+	ElapsedTime  int     `json:"elapsed_time"`
+	Name         string  `json:"name"`
+	AverageTemp  float64 `json:"average_temp"`
+	Rpe          int     `json:"icu_rpe"`
+	KgLifted     float64 `json:"kg_lifted"`
+	Decoupling   float64 `json:"decoupling"`
+	PowerLoad    int     `json:"power_load"`
+	HrLoad       int     `json:"hr_load"`
+	PaceLoad     int     `json:"pace_load"`
+	Distance     float64 `json:"distance"`
 }
 
 type Event struct {
@@ -223,6 +224,35 @@ func (c IntervalsClient) ListWellnessRecordsForDateRange(
 	}
 
 	return wellness, nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/wellness-ext-
+func (c IntervalsClient) ListWellnessRecordsForDateRangeAsCsv(
+	oldest time.Time,
+	newest time.Time,
+) ([][]string, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/wellness.csv?oldest=%s&newest=%s&cols=stress,sleepScore,sleepSecs,sleepQuality,hrv,restingHR,weight,soreness,fatigue,mood,motivation,injury",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return [][]string{}, fmt.Errorf("list wellness records csv error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	reader := csv.NewReader(resp.Body)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 // https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/activities
