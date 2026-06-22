@@ -2,7 +2,6 @@ package intervals
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -102,13 +101,21 @@ type Activity struct {
 	Distance     float64 `json:"distance"`
 }
 
+type EventCategory string
+
+const (
+	Note    EventCategory = "NOTE"
+	Injured EventCategory = "INJURED"
+	RaceA   EventCategory = "RACE_A"
+)
+
 type Event struct {
-	ID          int    `json:"id"`
-	Date        string `json:"start_date_local"`
-	Type        string `json:"type"`     // enum
-	Category    string `json:"category"` // enum
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ID          int           `json:"id"`
+	Date        string        `json:"start_date_local"`
+	Type        string        `json:"type"`     // enum
+	Category    EventCategory `json:"category"` // enum
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
 }
 
 // GetWellnessRecord sends a GET request to
@@ -224,35 +231,6 @@ func (c IntervalsClient) ListWellnessRecordsForDateRange(
 	}
 
 	return wellness, nil
-}
-
-// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/wellness-ext-
-func (c IntervalsClient) ListWellnessRecordsForDateRangeAsCsv(
-	oldest time.Time,
-	newest time.Time,
-) ([][]string, error) {
-	oldestStr := oldest.Format("2006-01-02")
-	newestStr := newest.Format("2006-01-02")
-	url := fmt.Sprintf(
-		c.url+"/athlete/%s/wellness.csv?oldest=%s&newest=%s&cols=stress,sleepScore,sleepSecs,sleepQuality,hrv,restingHR,weight,soreness,fatigue,mood,motivation,injury",
-		c.athleteID,
-		oldestStr,
-		newestStr,
-	)
-
-	resp, err := get(url, c.apiKey)
-	if err != nil {
-		return [][]string{}, fmt.Errorf("list wellness records csv error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	reader := csv.NewReader(resp.Body)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	return records, nil
 }
 
 // https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/activities
