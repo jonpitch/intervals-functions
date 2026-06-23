@@ -19,9 +19,12 @@ func IntervalsUserContent(today time.Time, wellness string, activities string, e
 	)
 }
 
-// ExtractText will pull out the claude response from an anthropic.Message
-func ExtractText(message *anthropic.Message) (string, error) {
+// ExtractModelResponse will pull out the claude response from an anthropic.Message
+func ExtractModelResponse(message *anthropic.Message) (string, error) {
 	var sb strings.Builder
+	if message == nil {
+		return "", fmt.Errorf("empty model response")
+	}
 
 	for _, block := range message.Content {
 		switch variant := block.AsAny().(type) {
@@ -38,4 +41,15 @@ func ExtractText(message *anthropic.Message) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+// GetUsageStats will return usage metrics for logging
+func GetUsageStats(usage anthropic.Usage) string {
+	return fmt.Sprintf(
+		"tokens — input: %d, output: %d, cache_read: %d, cache_creation: %d",
+		usage.InputTokens,
+		usage.OutputTokens,
+		usage.CacheReadInputTokens,
+		usage.CacheCreationInputTokens,
+	)
 }

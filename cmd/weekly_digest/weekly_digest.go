@@ -110,12 +110,13 @@ func main() {
 	// 1st pass (json, 0.05) - input: 10579, output: 1024 (limit 1024) - output stopped about halfway
 	// 2nd pass (csv, 0.04) - input: 9294, output: 1259 (limit 2048) - output finished
 	// 3rd pass (toon, 0.05) - input: 6640, output: 1427 (limit 2048) -output finished
+	// 4th pass, cache, haiku (toon, 0.01) - input: 6580, output: 1098 (limit 2048) -output finished in 20s
 
-	// TODO ai utility to output time spent, input tokens, output tokens
-
+	aiStart := time.Now()
 	message, err := anthropicClient.Messages.New(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.ModelClaudeSonnet4_6,
-		MaxTokens: 2048,
+		Model:        anthropic.ModelClaudeSonnet4_6,
+		MaxTokens:    2048,
+		CacheControl: anthropic.NewCacheControlEphemeralParam(),
 		System: []anthropic.TextBlockParam{
 			{Text: weeklyDigestPrompt},
 		},
@@ -123,26 +124,31 @@ func main() {
 			anthropic.NewUserMessage(anthropic.NewTextBlock(userContent)),
 		},
 	})
+	aiEnd := time.Now()
+	aiDuration := aiEnd.Sub(aiStart).Seconds()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	modelResponse, err := ai.ExtractText(message)
+	modelResponse, err := ai.ExtractModelResponse(message)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("%+v\n", message.Content)
-	fmt.Printf("%+v\n", message.Usage)
-	fmt.Println(modelResponse)
+	_, err = fmt.Printf("ai time: %f seconds\n", aiDuration)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(ai.GetUsageStats(message.Usage))
 
 	// add note for athlete
 	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 	err = intervalsClient.CreateEvent(intervals.Event{
 		Date:        today.Format("2006-01-02T00:00:00"),
 		Name:        noteName,
-		Category:    "NOTE", // TODO enum
+		Category:    intervals.Note,
 		Description: modelResponse,
 	})
 
