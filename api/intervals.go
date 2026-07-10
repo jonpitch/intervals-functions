@@ -99,6 +99,7 @@ type Activity struct {
 	HrLoad       int     `json:"hr_load"`
 	PaceLoad     int     `json:"pace_load"`
 	Distance     float64 `json:"distance"`
+	Variability  float64 `json:"icu_variability_index"`
 }
 
 type EventCategory string
