@@ -105,9 +105,7 @@ type Activity struct {
 type EventCategory string
 
 const (
-	Note    EventCategory = "NOTE"
-	Injured EventCategory = "INJURED"
-	RaceA   EventCategory = "RACE_A"
+	Note EventCategory = "NOTE"
 )
 
 type Event struct {
@@ -266,42 +264,6 @@ func (c IntervalsClient) ListActivitiesForDateRange(
 	}
 
 	return activities, nil
-}
-
-// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/events-format-
-func (c IntervalsClient) ListEventsForDateRange(
-	oldest time.Time,
-	newest time.Time,
-) ([]Event, error) {
-	oldestStr := oldest.Format("2006-01-02")
-	newestStr := newest.Format("2006-01-02")
-	url := fmt.Sprintf(
-		c.url+"/athlete/%s/events?oldest=%s&newest=%s&category=%s",
-		c.athleteID,
-		oldestStr,
-		newestStr,
-		// TODO params? enum?
-		"NOTE,RACE_A,RACE_B,RACE_C,SEASON_START,HOLIDAY,SICK,INJURED",
-	)
-
-	resp, err := get(url, c.apiKey)
-	if err != nil {
-		return []Event{}, fmt.Errorf("list events error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return []Event{}, fmt.Errorf("read events body failed: %w", err)
-	}
-
-	var events []Event
-	err = json.Unmarshal(body, &events)
-	if err != nil {
-		return []Event{}, fmt.Errorf("unmarshal events response body failed: %w", err)
-	}
-
-	return events, nil
 }
 
 // https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events

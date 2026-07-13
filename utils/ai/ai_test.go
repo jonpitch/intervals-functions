@@ -13,13 +13,14 @@ import (
 func TestIntervalsUserContent(t *testing.T) {
 	date := time.Date(2026, 1, 1, 12, 12, 12, 12, time.UTC)
 	wellness := "wellness"
-	events := "events"
+	windowAvg := "window-avg"
+	rollingAvg := "rolling-avg"
 	activities := "activities"
 
-	result := IntervalsUserContent(date, wellness, activities, events)
+	result := IntervalsUserContent(date, wellness, windowAvg, rollingAvg, activities)
 	assert.Equal(
 		t,
-		fmt.Sprintf("<today>%s</today><wellness>%s</wellness><activities>%s</activities><events>%s</events>", date, wellness, activities, events),
+		fmt.Sprintf("<today>%s</today><wellness>%s</wellness><averages>%s</averages><rolling-averages>%s</rolling-averages><activities>%s</activities>", date, wellness, windowAvg, rollingAvg, activities),
 		result,
 	)
 }

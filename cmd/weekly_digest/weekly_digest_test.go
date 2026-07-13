@@ -4,7 +4,6 @@ import (
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/ptr"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -50,95 +49,193 @@ func TestTrimWellnessRecords(t *testing.T) {
 	result := trimWellnessRecords(records)
 	assert.Equal(t, []intervals.WellnessRecord{
 		{
-			ID:               intervals.WellnessRecordID("abc"),
-			Respiration:      ptr.Float(6.1),
-			Stress:           &stress,
-			SleepScore:       ptr.Float(7.1),
-			SleepSeconds:     ptr.Int(81),
-			SleepQuality:     &sleep,
-			HrvRmssd:         ptr.Float(9.1),
-			RestingHr:        ptr.Int(11),
-			Weight:           ptr.Float(1.2),
-			Soreness:         ptr.Int(22),
-			Fatigue:          ptr.Int(32),
-			Mood:             ptr.Int(42),
-			Motivation:       ptr.Int(52),
-			Injury:           ptr.Int(62),
-			SleepNeedMinutes: ptr.Int(33),
+			ID:             intervals.WellnessRecordID("abc"),
+			Respiration:    ptr.Float(6.1),
+			Stress:         &stress,
+			SleepScore:     ptr.Float(7.1),
+			SleepSeconds:   ptr.Int(81),
+			SleepQuality:   &sleep,
+			HrvRmssd:       ptr.Float(9.1),
+			RestingHr:      ptr.Int(11),
+			Weight:         ptr.Float(1.2),
+			Soreness:       ptr.Int(22),
+			Fatigue:        ptr.Int(32),
+			Mood:           ptr.Int(42),
+			Motivation:     ptr.Int(52),
+			Injury:         ptr.Int(62),
+			BodyBatteryMin: ptr.Int(72),
+			BodyBatterMax:  ptr.Int(82),
 		},
 	}, result)
 }
 
-func TestTrimEvents(t *testing.T) {
-	today := time.Now()
-	dateCutoff := today.AddDate(0, 0, -8)
-	userInputLimit := 10
-	events := []intervals.Event{
-		// content trimmed
+func TestWindowAverages(t *testing.T) {
+	cases := []struct {
+		records  []intervals.WellnessRecord
+		expected WindowAverage
+	}{
 		{
-			Category:    intervals.Injured,
-			Description: "i got injured bro",
+			records: []intervals.WellnessRecord{
+				{
+					RestingHr:      ptr.Int(1),
+					HrvRmssd:       ptr.Float(10),
+					SleepScore:     ptr.Float(100.0),
+					Respiration:    ptr.Float(9),
+					BodyBatteryMin: ptr.Int(33),
+					BodyBatterMax:  ptr.Int(100),
+				},
+				{
+					RestingHr:      ptr.Int(2),
+					HrvRmssd:       ptr.Float(20),
+					SleepScore:     ptr.Float(60.0),
+					Respiration:    ptr.Float(8),
+					BodyBatteryMin: ptr.Int(25),
+					BodyBatterMax:  ptr.Int(95),
+				},
+			},
+			expected: WindowAverage{
+				RestingHeartRate: AveragedAttribute{
+					Average: ptr.Float(1.5),
+					Count:   2,
+				},
+				Hrv: AveragedAttribute{
+					Average: ptr.Float(15.0),
+					Count:   2,
+				},
+				SleepScore: AveragedAttribute{
+					Average: ptr.Float(80.0),
+					Count:   2,
+				},
+				Respiration: AveragedAttribute{
+					Average: ptr.Float(8.5),
+					Count:   2,
+				},
+				BodyBatteryMin: AveragedAttribute{
+					Average: ptr.Float(29.0),
+					Count:   2,
+				},
+				BodyBatteryMax: AveragedAttribute{
+					Average: ptr.Float(97.5),
+					Count:   2,
+				},
+			},
 		},
-		// included as is
 		{
-			Category:    intervals.RaceA,
-			Description: "won",
-		},
-		// included, content trimmed
-		{
-			Category:    intervals.Note,
-			Name:        "non digest",
-			Description: "here is a poem i wrote: be excellent to each other",
-		},
-		// excluded entirely
-		{
-			Category:    intervals.Note,
-			Name:        "Weekly Digest",
-			Date:        today.AddDate(0, 0, -30).Format("2006-01-02"),
-			Description: "a previous weekly digest",
-		},
-		// carryover not found in digest
-		{
-			Category:    intervals.Note,
-			Name:        "Weekly Digest",
-			Date:        today.AddDate(0, 0, -7).Format("2006-01-02"),
-			Description: "before content to ignore here is important context to use",
-		},
-		// included, only use carryover content, all of it
-		{
-			Category:    intervals.Note,
-			Name:        "Weekly Digest",
-			Date:        today.AddDate(0, 0, -7).Format("2006-01-02"),
-			Description: "before content to ignore <!-- carryover here is important context to use",
+			records: []intervals.WellnessRecord{},
+			expected: WindowAverage{
+				RestingHeartRate: AveragedAttribute{
+					Average: nil,
+					Count:   0,
+				},
+			},
 		},
 	}
 
-	result := trimEvents(events, userInputLimit, dateCutoff)
-	assert.Equal(t, []intervals.Event{
+	for _, c := range cases {
+		result := windowAverages(c.records)
+		assert.Equal(t, c.expected, result)
+	}
+}
+
+func TestWeeklyAverages(t *testing.T) {
+	// note that weeklyAverages calls windowAverages, so these test cases
+	// are focused on dates and grouping and wellness attributes, averages, totals, etc.
+	// are handled in TestWindowAverages
+	cases := []struct {
+		records  []intervals.WellnessRecord
+		expected []WeeklyAverages
+	}{
 		{
-			Category:    intervals.Injured,
-			Description: "i got inju",
+			records: []intervals.WellnessRecord{
+				{
+					ID:        intervals.WellnessRecordID("2026-01-01"),
+					RestingHr: ptr.Int(1),
+				},
+				{
+					ID:        intervals.WellnessRecordID("2026-01-02"),
+					RestingHr: ptr.Int(2),
+				},
+			},
+			expected: []WeeklyAverages{
+				{
+					Period: Week{
+						Year: 2026,
+						Week: 1,
+					},
+					Averages: WindowAverage{
+						RestingHeartRate: AveragedAttribute{
+							Average: ptr.Float(1.5),
+							Count:   2,
+						},
+					},
+				},
+			},
 		},
 		{
-			Category:    intervals.RaceA,
-			Description: "won",
+			records:  []intervals.WellnessRecord{},
+			expected: []WeeklyAverages{},
 		},
 		{
-			Category:    intervals.Note,
-			Name:        "non digest",
-			Description: "here is a ",
+			records: []intervals.WellnessRecord{
+				{
+					ID: intervals.WellnessRecordID("2026-01-01"),
+				},
+				{
+					ID: intervals.WellnessRecordID("2026-01-02"),
+				},
+			},
+			expected: []WeeklyAverages{
+				{
+					Period: Week{
+						Year: 2026,
+						Week: 1,
+					},
+					Averages: WindowAverage{},
+				},
+			},
 		},
 		{
-			Category:    intervals.Note,
-			Name:        "Weekly Digest",
-			Date:        today.AddDate(0, 0, -7).Format("2006-01-02"),
-			Description: "before con",
+			records: []intervals.WellnessRecord{
+				{
+					ID:        intervals.WellnessRecordID("2026-01-01"),
+					RestingHr: ptr.Int(1),
+				},
+				{
+					ID:        intervals.WellnessRecordID("2026-02-01"),
+					RestingHr: ptr.Int(2),
+				},
+			},
+			expected: []WeeklyAverages{
+				{
+					Period: Week{
+						Year: 2026,
+						Week: 1,
+					},
+					Averages: WindowAverage{
+						RestingHeartRate: AveragedAttribute{
+							Average: ptr.Float(1.0),
+							Count:   1,
+						},
+					},
+				},
+				{
+					Period: Week{
+						Year: 2026,
+						Week: 5,
+					},
+					Averages: WindowAverage{
+						RestingHeartRate: AveragedAttribute{
+							Average: ptr.Float(2.0),
+							Count:   1,
+						},
+					},
+				},
+			},
 		},
-		{
-			Category:    intervals.Note,
-			Name:        "Weekly Digest",
-			Date:        today.AddDate(0, 0, -7).Format("2006-01-02"),
-			Description: " here is important context to use",
-		},
-	}, result)
+	}
+
+	for _, c := range cases {
+		result := weeklyAverages(c.records)
+		assert.Equal(t, c.expected, result)
+	}
 }

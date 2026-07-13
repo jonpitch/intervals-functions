@@ -9,13 +9,20 @@ import (
 )
 
 // IntervalsUserContent is a helper function to concatenate some data together in a structured way for AI
-func IntervalsUserContent(today time.Time, wellness string, activities string, events string) string {
+func IntervalsUserContent(
+	today time.Time,
+	wellness string,
+	windowAverages string,
+	rollingAverages string,
+	activities string,
+) string {
 	return fmt.Sprintf(
-		`<today>%s</today><wellness>%s</wellness><activities>%s</activities><events>%s</events>`,
+		`<today>%s</today><wellness>%s</wellness><averages>%s</averages><rolling-averages>%s</rolling-averages><activities>%s</activities>`,
 		today,
 		wellness,
+		windowAverages,
+		rollingAverages,
 		activities,
-		events,
 	)
 }
 
