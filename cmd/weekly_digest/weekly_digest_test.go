@@ -4,6 +4,7 @@ import (
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/ptr"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -238,4 +239,51 @@ func TestWeeklyAverages(t *testing.T) {
 		result := weeklyAverages(c.records)
 		assert.Equal(t, c.expected, result)
 	}
+}
+
+func TestTrimEvents(t *testing.T) {
+	today := time.Now()
+	dateCutoff := today.AddDate(0, 0, -8)
+	oldDate := today.AddDate(0, 0, -43).Format("2006-01-02T00:00:00")
+	recentDate := today.AddDate(0, 0, -7).Format("2006-01-02T00:00:00")
+	events := []intervals.Event{
+		// included, content trimmed
+		{
+			Category:    intervals.Note,
+			Name:        "non digest",
+			Date:        recentDate,
+			Description: "here is a poem i wrote: be excellent to each other",
+		},
+		// excluded entirely
+		{
+			Category:    intervals.Note,
+			Name:        "Weekly Digest",
+			Date:        oldDate,
+			Description: "a previous weekly digest",
+		},
+		// carryover not found in digest
+		{
+			Category:    intervals.Note,
+			Name:        "Weekly Digest",
+			Date:        recentDate,
+			Description: "before content to ignore here is important context to use",
+		},
+		// included, only use carryover content, all of it
+		{
+			Category:    intervals.Note,
+			Name:        "Weekly Digest",
+			Date:        recentDate,
+			Description: "before content to ignore <!-- carryover here is important context to use",
+		},
+	}
+
+	result := trimEvents(events, dateCutoff)
+	assert.Equal(t, []intervals.Event{
+		{
+			Category:    intervals.Note,
+			Name:        "Weekly Digest",
+			Date:        recentDate,
+			Description: " here is important context to use",
+		},
+	}, result)
 }

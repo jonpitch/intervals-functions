@@ -4,32 +4,61 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	intervals "intervals-functions/api"
 	"intervals-functions/utils/ai"
 	"intervals-functions/utils/ptr"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	toon "github.com/bug4fix/totoon/go"
 	"github.com/joho/godotenv"
 )
 
+func main() {
+	_, found := os.LookupEnv("IS_NETLIFY")
+	if !found {
+		fmt.Println("not netlify environment, loading .env")
+		err := godotenv.Load("../../.env")
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
+
+		_, err = weeklydigest()
+		if err != nil {
+			log.Fatalf("an error occurred: %v", err)
+		}
+	} else {
+		lambda.Start(handler)
+	}
+}
+
+// lambda function handler
+func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	status, err := weeklydigest()
+	return events.APIGatewayProxyResponse{
+		StatusCode: status,
+		Body:       "done",
+	}, err
+}
+
 //go:embed weekly_digest_prompt.md
 var weeklyDigestPrompt string
 
-func main() {
-	// update this based on netlify or not
-	err := godotenv.Load("../../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
+func weeklydigest() (int, error) {
 	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
 	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
+	anthropicApiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if intervalsApiKey == "" || intervalsAthleteID == "" || anthropicApiKey == "" {
+		return 500, errors.New("INTERVALS_API_KEY, INTERVALS_ATHLETE_ID, or ANTHROPIC_API_KEY is not set")
+	}
 
 	intervalsClient := intervals.NewIntervalsClient(
 		intervals.APIURL,
@@ -37,73 +66,82 @@ func main() {
 		intervalsAthleteID,
 	)
 
-	// future features:
-	// - quarterly digest
-	// - annual digest / compare data year-over-year
 	today := time.Now()
 	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	// remove wellness fields that aren't relevant to the weekly digest
-	// and compute averages
+	// and compute averages to reduce token usage
 	wellness = trimWellnessRecords(wellness)
 	windowAverages := windowAverages(wellness)
 	rollingAverages := weeklyAverages(wellness)
 
 	windowAveragesJson, err := json.Marshal(windowAverages)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	rollingAveragesJson, err := json.Marshal(rollingAverages)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	windowAveragesToon, err := toon.JSONToToon(string(windowAveragesJson))
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	rollingAveragesToon, err := toon.JSONToToon(string(rollingAveragesJson))
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
-
-	// TODO 42 day averages of fitness/ctl/atl?
-	// TODO rolling averages of fitness/ctl/atl?
 
 	wellnessJson, err := json.Marshal(wellness)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	wellnessToon, err := toon.JSONToToon(string(wellnessJson))
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	// note - no activities endpoint as csv. do it myself to save tokens?
 	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	activitiesJson, err := json.Marshal(activities)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	activitiesToon, err := toon.JSONToToon(string(activitiesJson))
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
+	}
+
+	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
+	if err != nil {
+		return 500, err
+	}
+
+	events = trimEvents(events, today.AddDate(0, 0, -8))
+	eventsJson, err := json.Marshal(events)
+	if err != nil {
+		return 500, err
+	}
+
+	eventsToon, err := toon.JSONToToon(string(eventsJson))
+	if err != nil {
+		return 500, err
 	}
 
 	// make claude API request
-	anthropicApiKey := os.Getenv("ANTHROPIC_API_KEY")
 	anthropicClient := anthropic.NewClient(
 		option.WithAPIKey(anthropicApiKey),
 	)
@@ -114,6 +152,7 @@ func main() {
 		windowAveragesToon,
 		rollingAveragesToon,
 		activitiesToon,
+		eventsToon,
 	)
 
 	fmt.Println(userContent)
@@ -134,19 +173,19 @@ func main() {
 	aiDuration := aiEnd.Sub(aiStart).Seconds()
 
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	modelResponse, err := ai.ExtractModelResponse(message)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	fmt.Println(modelResponse)
 
 	_, err = fmt.Printf("ai time: %f seconds\n", aiDuration)
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	fmt.Println(ai.GetUsageStats(message.Usage))
@@ -161,10 +200,11 @@ func main() {
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		return 500, err
 	}
 
 	fmt.Println("complete")
+	return 200, nil
 }
 
 type AveragedAttribute struct {
@@ -345,4 +385,47 @@ func trimWellnessRecords(wellness []intervals.WellnessRecord) []intervals.Wellne
 		wellness[i].SleepRemTimeSeconds = nil
 	}
 	return wellness
+}
+
+// trimEvents will clamp event content to a character limit to reduce input tokens.
+// it will also drop out any weekly digest event that isn't from last week.
+func trimEvents(
+	events []intervals.Event,
+	weekAgo time.Time,
+) []intervals.Event {
+	updated := []intervals.Event{}
+	for _, e := range events {
+		if e.Category != intervals.Note {
+			continue
+		}
+
+		if strings.Contains(e.Name, "Weekly Digest") {
+			// if older weekly digest - throw away
+			d, err := time.Parse("2006-01-02T15:04:05", e.Date)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			if d.Before(weekAgo) {
+				continue
+			}
+
+			// if previous weekly digest, use <!-- carryover only
+			// ignore everything else
+			_, after, found := strings.Cut(e.Description, "<!-- carryover")
+			if !found {
+				continue
+			} else {
+				e.Description = after
+				updated = append(updated, e)
+				continue
+			}
+
+		} else {
+			continue
+		}
+	}
+
+	return updated
 }

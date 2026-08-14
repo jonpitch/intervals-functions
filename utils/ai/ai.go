@@ -15,14 +15,16 @@ func IntervalsUserContent(
 	windowAverages string,
 	rollingAverages string,
 	activities string,
+	events string,
 ) string {
 	return fmt.Sprintf(
-		`<today>%s</today><wellness>%s</wellness><averages>%s</averages><rolling-averages>%s</rolling-averages><activities>%s</activities>`,
+		`<today>%s</today><wellness>%s</wellness><averages>%s</averages><rolling-averages>%s</rolling-averages><activities>%s</activities><events>%s</events>`,
 		today,
 		wellness,
 		windowAverages,
 		rollingAverages,
 		activities,
+		events,
 	)
 }
 

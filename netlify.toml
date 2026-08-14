@@ -5,3 +5,6 @@
   GO_IMPORT_PATH = "github.com/jonpitch/intervals-functions"
 [functions."cronometer"]
   schedule = "0 5 * * *"
+[functions."weekly_digest"]
+  background = true
+  schedule = "0 0 * * 1"

@@ -266,6 +266,42 @@ func (c IntervalsClient) ListActivitiesForDateRange(
 	return activities, nil
 }
 
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/events-format-
+// as implemented, only gets notes (not races, sick, injured, etc.)
+func (c IntervalsClient) ListEventsForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]Event, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/events?oldest=%s&newest=%s&category=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+		"NOTE",
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []Event{}, fmt.Errorf("list events error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []Event{}, fmt.Errorf("read events body failed: %w", err)
+	}
+
+	var events []Event
+	err = json.Unmarshal(body, &events)
+	if err != nil {
+		return []Event{}, fmt.Errorf("unmarshal events response body failed: %w", err)
+	}
+
+	return events, nil
+}
+
 // https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
 func (c IntervalsClient) CreateEvent(event Event) error {
 	url := fmt.Sprintf(c.url+"/athlete/%s/events", c.athleteID)
