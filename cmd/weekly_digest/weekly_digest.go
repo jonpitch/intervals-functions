@@ -68,6 +68,7 @@ func weeklydigest() (int, error) {
 
 	today := time.Now()
 	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
+	fmt.Println("getting wellness data...")
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
 		return 500, err
@@ -75,6 +76,7 @@ func weeklydigest() (int, error) {
 
 	// remove wellness fields that aren't relevant to the weekly digest
 	// and compute averages to reduce token usage
+	fmt.Println("computing rolling averages...")
 	wellness = trimWellnessRecords(wellness)
 	windowAverages := windowAverages(wellness)
 	rollingAverages := weeklyAverages(wellness)
@@ -109,7 +111,7 @@ func weeklydigest() (int, error) {
 		return 500, err
 	}
 
-	// note - no activities endpoint as csv. do it myself to save tokens?
+	fmt.Println("get activities data...")
 	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
 		return 500, err
@@ -125,6 +127,7 @@ func weeklydigest() (int, error) {
 		return 500, err
 	}
 
+	fmt.Println("get events data...")
 	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
 		return 500, err
@@ -155,13 +158,11 @@ func weeklydigest() (int, error) {
 		eventsToon,
 	)
 
-	fmt.Println(userContent)
-
 	aiStart := time.Now()
+	fmt.Println("sending to LLM...")
 	message, err := anthropicClient.Messages.New(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.ModelClaudeSonnet4_6,
 		MaxTokens: 2048,
-		// CacheControl: anthropic.NewCacheControlEphemeralParam(),
 		System: []anthropic.TextBlockParam{
 			{Text: weeklyDigestPrompt},
 		},
@@ -180,8 +181,6 @@ func weeklydigest() (int, error) {
 	if err != nil {
 		return 500, err
 	}
-
-	fmt.Println(modelResponse)
 
 	_, err = fmt.Printf("ai time: %f seconds\n", aiDuration)
 	if err != nil {
