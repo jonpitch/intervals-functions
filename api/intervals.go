@@ -42,6 +42,14 @@ type WellnessRecord struct {
 	RestingHr        *int             `json:"restingHR,omitempty"`
 	Weight           *float64         `json:"weight,omitempty"` // stored in user's measurement preference (kg, lbs)
 
+	// user subjective attributes
+	// currently only used for weekly digest, so no enums needed
+	Soreness   *int `json:"soreness,omitempty"`
+	Fatigue    *int `json:"fatigue,omitempty"`
+	Mood       *int `json:"mood,omitempty"`
+	Motivation *int `json:"motivation,omitempty"`
+	Injury     *int `json:"injury,omitempty"`
+
 	// custom attributes
 	BodyBatteryMin        *int `json:"BodyBatteryMin,omitempty"`
 	BodyBatterMax         *int `json:"BodyBatteryMax,omitempty"`
@@ -73,6 +81,41 @@ const (
 	AverageSleepQuality SleepQuality = 3
 	PoorSleepQuality    SleepQuality = 4
 )
+
+type Activity struct {
+	ID           string  `json:"id"`
+	Type         string  `json:"type"`
+	Date         string  `json:"start_date_local"`
+	TrainingLoad int     `json:"icu_training_load"`
+	Atl          float64 `json:"icu_atl"`
+	Ctl          float64 `json:"icu_ctl"`
+	ElapsedTime  int     `json:"elapsed_time"`
+	Name         string  `json:"name"`
+	AverageTemp  float64 `json:"average_temp"`
+	Rpe          int     `json:"icu_rpe"`
+	KgLifted     float64 `json:"kg_lifted"`
+	Decoupling   float64 `json:"decoupling"`
+	PowerLoad    int     `json:"power_load"`
+	HrLoad       int     `json:"hr_load"`
+	PaceLoad     int     `json:"pace_load"`
+	Distance     float64 `json:"distance"`
+	Variability  float64 `json:"icu_variability_index"`
+}
+
+type EventCategory string
+
+const (
+	Note EventCategory = "NOTE"
+)
+
+type Event struct {
+	ID          int           `json:"id"`
+	Date        string        `json:"start_date_local"`
+	Type        string        `json:"type"`     // enum
+	Category    EventCategory `json:"category"` // enum
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+}
 
 // GetWellnessRecord sends a GET request to
 //
@@ -155,9 +198,151 @@ func (c IntervalsClient) BulkUpdateWellnessRecord(wellness []WellnessRecord) err
 	return nil
 }
 
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/wellness-ext-
+func (c IntervalsClient) ListWellnessRecordsForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]WellnessRecord, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/wellness?oldest=%s&newest=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("list wellness records error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("read response body failed: %w", err)
+	}
+
+	var wellness []WellnessRecord
+	err = json.Unmarshal(body, &wellness)
+	if err != nil {
+		return []WellnessRecord{}, fmt.Errorf("unmarshal wellness records response body failed: %w", err)
+	}
+
+	return wellness, nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/activities
+func (c IntervalsClient) ListActivitiesForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]Activity, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/activities?oldest=%s&newest=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("list activities error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("read activities body failed: %w", err)
+	}
+
+	var activities []Activity
+	err = json.Unmarshal(body, &activities)
+	if err != nil {
+		return []Activity{}, fmt.Errorf("unmarshal activities response body failed: %w", err)
+	}
+
+	return activities, nil
+}
+
+// https://intervals.icu/api-docs.html#get-/api/v1/athlete/-id-/events-format-
+// as implemented, only gets notes (not races, sick, injured, etc.)
+func (c IntervalsClient) ListEventsForDateRange(
+	oldest time.Time,
+	newest time.Time,
+) ([]Event, error) {
+	oldestStr := oldest.Format("2006-01-02")
+	newestStr := newest.Format("2006-01-02")
+	url := fmt.Sprintf(
+		c.url+"/athlete/%s/events?oldest=%s&newest=%s&category=%s",
+		c.athleteID,
+		oldestStr,
+		newestStr,
+		"NOTE",
+	)
+
+	resp, err := get(url, c.apiKey)
+	if err != nil {
+		return []Event{}, fmt.Errorf("list events error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return []Event{}, fmt.Errorf("read events body failed: %w", err)
+	}
+
+	var events []Event
+	err = json.Unmarshal(body, &events)
+	if err != nil {
+		return []Event{}, fmt.Errorf("unmarshal events response body failed: %w", err)
+	}
+
+	return events, nil
+}
+
+// https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
+func (c IntervalsClient) CreateEvent(event Event) error {
+	url := fmt.Sprintf(c.url+"/athlete/%s/events", c.athleteID)
+
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal event payload: %w", err)
+	}
+
+	resp, err := post(url, c.apiKey, body)
+	if err != nil {
+		return fmt.Errorf("create event record error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("intervals.icu API returned status %s", resp.Status)
+	}
+
+	return nil
+}
+
 // get sends a GET request to the given url
 func get(url string, apiKey string) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("API_KEY", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// put sends a POST request to the given url with the given api key and body
+func post(url string, apiKey string, body []byte) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
