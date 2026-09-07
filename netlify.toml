@@ -7,4 +7,4 @@
   schedule = "0 5 * * *"
 [functions."weekly_digest"]
   background = true
-  schedule = "0 0 * * 1"
+  schedule = "0 9 * * 1"

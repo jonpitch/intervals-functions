@@ -80,6 +80,12 @@ to run the backfill:
 - `apiKey` your intervals.icu API key
 - `dry-run` (optional) will print the results to the terminal and not send any data to intervals
 
+## weekly digest
+
+use the past 42 days of wellness data and pass off to an LLM to try surface any insights that might be relevant. prompt is athlete agnostic, and only relies on wellness and activity data.
+
+currently works with Claude, and requires `ANTHROPIC_API_KEY` to be set.
+
 # building
 
 `make build`
