@@ -38,7 +38,6 @@ func ExtractModelResponse(message *anthropic.Message) (string, error) {
 	for _, block := range message.Content {
 		switch variant := block.AsAny().(type) {
 		case anthropic.TextBlock:
-			fmt.Println(variant)
 			sb.WriteString(variant.Text)
 		default:
 			continue
