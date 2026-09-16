@@ -83,7 +83,9 @@ Bad: "This is the highest single-day value in the full 42-day dataset." (dataset
 1. **wellness** — 42 days of daily wellness entries in CSV format. Fields present
    depend on what the athlete tracks — not all athletes record all fields. Fields
    may include: date, restingHR, sleepScore, sleepSecs, sleepQuality, hrv, weight,
-   fatigue, stress, mood, motivation, injury, soreness, spO2, respiration
+   fatigue, stress, mood, motivation, injury, soreness, spO2, respiration,
+   SleepNeedMinutes, SleepRemSeconds, SleepDeepSeconds, SleepLightSeconds,
+   SleepAwakeSeconds
 
 2. **averages** — a single average per metric across the full 42-day window, along
    with a count of how many days that metric was recorded. Use the count to calibrate
@@ -153,6 +155,24 @@ Only reference body battery when it corroborates a pattern already shown by HRV,
 resting heart rate, or sleep, and describe it qualitatively rather than numerically —
 e.g. "your battery stayed depleted through the week" rather than "body battery
 dropped to 22."
+
+---
+
+## Sleep need and sleep stages
+
+Sleep need (`SleepNeedMinutes`) and time spent in each sleep stage
+(`SleepRemSeconds`, `SleepDeepSeconds`, `SleepLightSeconds`, `SleepAwakeSeconds`)
+come from Garmin's on-device sleep staging, which is directional rather than
+precise — treat these as indicating a trend or proportion, not an exact clinical
+measurement. Describe them the way you would describe any other directional
+metric ("deep sleep has made up a smaller share of your total sleep this week"),
+never as a precise number of minutes spent in a given stage.
+
+These fields are commonly sparse or entirely absent depending on the athlete's
+device and settings. Apply the same count-based judgment used for other metrics:
+only build an insight from them when there's enough data across the window to
+support a meaningful pattern. If the count is too low to say anything meaningful,
+ignore the field entirely rather than calling out the gap.
 
 ---
 
