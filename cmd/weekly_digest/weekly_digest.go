@@ -67,6 +67,21 @@ func weeklydigest() (int, error) {
 	)
 
 	today := time.Now()
+	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
+
+	fmt.Println("checking for existing weekly digest...")
+	todaysEvents, err := intervalsClient.ListEventsForDateRange(today, today)
+	if err != nil {
+		return 500, err
+	}
+
+	for _, e := range todaysEvents {
+		if e.Name == noteName {
+			fmt.Println("weekly digest already exists for today, skipping")
+			return 200, nil
+		}
+	}
+
 	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
 	fmt.Println("getting wellness data...")
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
@@ -190,7 +205,6 @@ func weeklydigest() (int, error) {
 	fmt.Println(ai.GetUsageStats(message.Usage))
 
 	// add note for athlete
-	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 	err = intervalsClient.CreateEvent(intervals.Event{
 		Date:        today.Format("2006-01-02T00:00:00"),
 		Name:        noteName,
@@ -373,7 +387,6 @@ func trimWellnessRecords(wellness []intervals.WellnessRecord) []intervals.Wellne
 		wellness[i].KCalConsumed = nil
 		wellness[i].LowStressSeconds = nil
 		wellness[i].MediumStressSeconds = nil
-		wellness[i].OxygenSaturation = nil
 		wellness[i].OxygenSaturation = nil
 		wellness[i].Protein = nil
 		wellness[i].RestStressSeconds = nil

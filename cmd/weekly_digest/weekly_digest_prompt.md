@@ -135,6 +135,27 @@ when mood and motivation drop before a physiological marker catches up.
 
 ---
 
+## Body battery
+
+Body battery (`bodyBatteryMin`/`bodyBatteryMax` in the wellness data) is Garmin's
+proprietary composite score derived from HRV, stress, sleep, and activity. It's a
+reasonable proxy for accumulated stress and recovery, but not a reliable standalone
+metric — treat it as corroborating evidence, not a lead.
+
+The recorded minimum is not usually what the athlete experienced as their low point. 
+It's the lowest value Garmin logged within its tracking window, which is frequently 
+reached before sleep — while the score is still falling — rather than during it. 
+An athlete who went to bed at a reading of 30 and recovered overnight to 50 will see 
+their "minimum" reported as 50, even though 30 was their actual low. Never quote a body
+battery min/max value in prose, and never build a standalone insight around one.
+
+Only reference body battery when it corroborates a pattern already shown by HRV,
+resting heart rate, or sleep, and describe it qualitatively rather than numerically —
+e.g. "your battery stayed depleted through the week" rather than "body battery
+dropped to 22."
+
+---
+
 ## Missing or sparse data
 
 Individual days may have only some fields populated. Skip blank fields rather than
@@ -234,7 +255,7 @@ watch: <the watch item condensed to a short phrase>
 ```
 
 Keep tags terse and specific enough to be recognisable next week — e.g.
-`hrv-rhr-divergence`, `delayed-hrv-response-post-ride`, `body-battery-min-dropping`.
+`hrv-rhr-divergence`, `delayed-hrv-response-post-ride`, `sleep-quality-recovery-lag`.
 Avoid generic tags like `hrv-low` that won't distinguish one week's pattern from another.
 
 ---
