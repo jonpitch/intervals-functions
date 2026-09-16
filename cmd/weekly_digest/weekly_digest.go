@@ -67,6 +67,21 @@ func weeklydigest() (int, error) {
 	)
 
 	today := time.Now()
+	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
+
+	fmt.Println("checking for existing weekly digest...")
+	todaysEvents, err := intervalsClient.ListEventsForDateRange(today, today)
+	if err != nil {
+		return 500, err
+	}
+
+	for _, e := range todaysEvents {
+		if e.Name == noteName {
+			fmt.Println("weekly digest already exists for today, skipping")
+			return 200, nil
+		}
+	}
+
 	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
 	fmt.Println("getting wellness data...")
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
@@ -190,7 +205,6 @@ func weeklydigest() (int, error) {
 	fmt.Println(ai.GetUsageStats(message.Usage))
 
 	// add note for athlete
-	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 	err = intervalsClient.CreateEvent(intervals.Event{
 		Date:        today.Format("2006-01-02T00:00:00"),
 		Name:        noteName,
@@ -212,12 +226,17 @@ type AveragedAttribute struct {
 }
 
 type WindowAverage struct {
-	RestingHeartRate AveragedAttribute
-	Hrv              AveragedAttribute
-	SleepScore       AveragedAttribute
-	Respiration      AveragedAttribute
-	BodyBatteryMin   AveragedAttribute
-	BodyBatteryMax   AveragedAttribute
+	RestingHeartRate      AveragedAttribute
+	Hrv                   AveragedAttribute
+	SleepScore            AveragedAttribute
+	Respiration           AveragedAttribute
+	BodyBatteryMin        AveragedAttribute
+	BodyBatteryMax        AveragedAttribute
+	SleepNeedMinutes      AveragedAttribute
+	SleepRemTimeSeconds   AveragedAttribute
+	SleepDeepTimeSeconds  AveragedAttribute
+	SleepLightTimeSeconds AveragedAttribute
+	SleepAwakeTimeSeconds AveragedAttribute
 }
 
 // windowAverages computes averages for specific wellness attributes across all wellness records
@@ -234,6 +253,16 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	bodyBatteryMinTotal := 0
 	bodyBatteryMaxSum := 0
 	bodyBatterMaxTotal := 0
+	sleepNeedMinutesSum := 0
+	sleepNeedMinutesTotal := 0
+	sleepRemSum := 0
+	sleepRemTotal := 0
+	sleepDeepSum := 0
+	sleepDeepTotal := 0
+	sleepLightSum := 0
+	sleepLightTotal := 0
+	sleepAwakeSum := 0
+	sleepAwakeTotal := 0
 
 	var avgRestingHr *float64
 	var avgHrv *float64
@@ -241,6 +270,11 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	var avgRespiration *float64
 	var avgBodyBatteryMin *float64
 	var avgBodyBatterMax *float64
+	var avgSleepNeedMinutes *float64
+	var avgSleepRem *float64
+	var avgSleepDeep *float64
+	var avgSleepLight *float64
+	var avgSleepAwake *float64
 	for _, w := range wellness {
 		if w.RestingHr != nil {
 			restingHrSum += *w.RestingHr
@@ -266,6 +300,26 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 			respirationSum += *w.Respiration
 			respirationTotal++
 		}
+		if w.SleepNeedMinutes != nil {
+			sleepNeedMinutesSum += *w.SleepNeedMinutes
+			sleepNeedMinutesTotal++
+		}
+		if w.SleepRemTimeSeconds != nil {
+			sleepRemSum += *w.SleepRemTimeSeconds
+			sleepRemTotal++
+		}
+		if w.SleepDeepTimeSeconds != nil {
+			sleepDeepSum += *w.SleepDeepTimeSeconds
+			sleepDeepTotal++
+		}
+		if w.SleepLightTimeSeconds != nil {
+			sleepLightSum += *w.SleepLightTimeSeconds
+			sleepLightTotal++
+		}
+		if w.SleepAwakeTimeSeconds != nil {
+			sleepAwakeSum += *w.SleepAwakeTimeSeconds
+			sleepAwakeTotal++
+		}
 	}
 
 	if restingHrTotal != 0 {
@@ -285,6 +339,21 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	}
 	if respirationTotal != 0 {
 		avgRespiration = ptr.Float(respirationSum / float64(respirationTotal))
+	}
+	if sleepNeedMinutesTotal != 0 {
+		avgSleepNeedMinutes = ptr.Float(float64(sleepNeedMinutesSum) / float64(sleepNeedMinutesTotal))
+	}
+	if sleepRemTotal != 0 {
+		avgSleepRem = ptr.Float(float64(sleepRemSum) / float64(sleepRemTotal))
+	}
+	if sleepDeepTotal != 0 {
+		avgSleepDeep = ptr.Float(float64(sleepDeepSum) / float64(sleepDeepTotal))
+	}
+	if sleepLightTotal != 0 {
+		avgSleepLight = ptr.Float(float64(sleepLightSum) / float64(sleepLightTotal))
+	}
+	if sleepAwakeTotal != 0 {
+		avgSleepAwake = ptr.Float(float64(sleepAwakeSum) / float64(sleepAwakeTotal))
 	}
 
 	return WindowAverage{
@@ -311,6 +380,26 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 		BodyBatteryMax: AveragedAttribute{
 			Average: avgBodyBatterMax,
 			Count:   bodyBatterMaxTotal,
+		},
+		SleepNeedMinutes: AveragedAttribute{
+			Average: avgSleepNeedMinutes,
+			Count:   sleepNeedMinutesTotal,
+		},
+		SleepRemTimeSeconds: AveragedAttribute{
+			Average: avgSleepRem,
+			Count:   sleepRemTotal,
+		},
+		SleepDeepTimeSeconds: AveragedAttribute{
+			Average: avgSleepDeep,
+			Count:   sleepDeepTotal,
+		},
+		SleepLightTimeSeconds: AveragedAttribute{
+			Average: avgSleepLight,
+			Count:   sleepLightTotal,
+		},
+		SleepAwakeTimeSeconds: AveragedAttribute{
+			Average: avgSleepAwake,
+			Count:   sleepAwakeTotal,
 		},
 	}
 }
@@ -374,14 +463,8 @@ func trimWellnessRecords(wellness []intervals.WellnessRecord) []intervals.Wellne
 		wellness[i].LowStressSeconds = nil
 		wellness[i].MediumStressSeconds = nil
 		wellness[i].OxygenSaturation = nil
-		wellness[i].OxygenSaturation = nil
 		wellness[i].Protein = nil
 		wellness[i].RestStressSeconds = nil
-		wellness[i].SleepNeedMinutes = nil
-		wellness[i].SleepAwakeTimeSeconds = nil
-		wellness[i].SleepDeepTimeSeconds = nil
-		wellness[i].SleepLightTimeSeconds = nil
-		wellness[i].SleepRemTimeSeconds = nil
 	}
 	return wellness
 }
