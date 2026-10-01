@@ -94,6 +94,8 @@ func TestWindowAverages(t *testing.T) {
 					SleepDeepTimeSeconds:  ptr.Int(3000),
 					SleepLightTimeSeconds: ptr.Int(5000),
 					SleepAwakeTimeSeconds: ptr.Int(600),
+					Vo2Max:                ptr.Float(51.0),
+					CyclingVo2Max:         ptr.Float(53.0),
 				},
 				{
 					RestingHr:             ptr.Int(2),
@@ -107,6 +109,8 @@ func TestWindowAverages(t *testing.T) {
 					SleepDeepTimeSeconds:  ptr.Int(3200),
 					SleepLightTimeSeconds: ptr.Int(5200),
 					SleepAwakeTimeSeconds: ptr.Int(800),
+					Vo2Max:                ptr.Float(53.0),
+					CyclingVo2Max:         ptr.Float(55.0),
 				},
 			},
 			expected: WindowAverage{
@@ -152,6 +156,14 @@ func TestWindowAverages(t *testing.T) {
 				},
 				SleepAwakeTimeSeconds: AveragedAttribute{
 					Average: ptr.Float(700.0),
+					Count:   2,
+				},
+				Vo2Max: AveragedAttribute{
+					Average: ptr.Float(52.0),
+					Count:   2,
+				},
+				CyclingVo2Max: AveragedAttribute{
+					Average: ptr.Float(54.0),
 					Count:   2,
 				},
 			},

@@ -237,6 +237,8 @@ type WindowAverage struct {
 	SleepDeepTimeSeconds  AveragedAttribute
 	SleepLightTimeSeconds AveragedAttribute
 	SleepAwakeTimeSeconds AveragedAttribute
+	Vo2Max                AveragedAttribute
+	CyclingVo2Max         AveragedAttribute
 }
 
 // windowAverages computes averages for specific wellness attributes across all wellness records
@@ -263,6 +265,10 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	sleepLightTotal := 0
 	sleepAwakeSum := 0
 	sleepAwakeTotal := 0
+	vo2MaxSum := 0.0
+	vo2MaxTotal := 0
+	cyclingVo2MaxSum := 0.0
+	cyclingVo2MaxTotal := 0
 
 	var avgRestingHr *float64
 	var avgHrv *float64
@@ -275,6 +281,8 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	var avgSleepDeep *float64
 	var avgSleepLight *float64
 	var avgSleepAwake *float64
+	var avgVo2Max *float64
+	var avgCyclingVo2Max *float64
 	for _, w := range wellness {
 		if w.RestingHr != nil {
 			restingHrSum += *w.RestingHr
@@ -320,6 +328,14 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 			sleepAwakeSum += *w.SleepAwakeTimeSeconds
 			sleepAwakeTotal++
 		}
+		if w.Vo2Max != nil {
+			vo2MaxSum += *w.Vo2Max
+			vo2MaxTotal++
+		}
+		if w.CyclingVo2Max != nil {
+			cyclingVo2MaxSum += *w.CyclingVo2Max
+			cyclingVo2MaxTotal++
+		}
 	}
 
 	if restingHrTotal != 0 {
@@ -354,6 +370,12 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	}
 	if sleepAwakeTotal != 0 {
 		avgSleepAwake = ptr.Float(float64(sleepAwakeSum) / float64(sleepAwakeTotal))
+	}
+	if vo2MaxTotal != 0 {
+		avgVo2Max = ptr.Float(vo2MaxSum / float64(vo2MaxTotal))
+	}
+	if cyclingVo2MaxTotal != 0 {
+		avgCyclingVo2Max = ptr.Float(cyclingVo2MaxSum / float64(cyclingVo2MaxTotal))
 	}
 
 	return WindowAverage{
@@ -400,6 +422,14 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 		SleepAwakeTimeSeconds: AveragedAttribute{
 			Average: avgSleepAwake,
 			Count:   sleepAwakeTotal,
+		},
+		Vo2Max: AveragedAttribute{
+			Average: avgVo2Max,
+			Count:   vo2MaxTotal,
+		},
+		CyclingVo2Max: AveragedAttribute{
+			Average: avgCyclingVo2Max,
+			Count:   cyclingVo2MaxTotal,
 		},
 	}
 }
