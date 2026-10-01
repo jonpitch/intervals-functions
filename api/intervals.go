@@ -41,6 +41,7 @@ type WellnessRecord struct {
 	HrvRmssd         *float64         `json:"hrv,omitempty"`
 	RestingHr        *int             `json:"restingHR,omitempty"`
 	Weight           *float64         `json:"weight,omitempty"` // stored in user's measurement preference (kg, lbs)
+	Vo2Max           *float64         `json:"vo2max,omitempty"`
 
 	// user subjective attributes
 	// currently only used for weekly digest, so no enums needed
@@ -51,17 +52,18 @@ type WellnessRecord struct {
 	Injury     *int `json:"injury,omitempty"`
 
 	// custom attributes
-	BodyBatteryMin        *int `json:"BodyBatteryMin,omitempty"`
-	BodyBatterMax         *int `json:"BodyBatteryMax,omitempty"`
-	RestStressSeconds     *int `json:"StressRestSeconds,omitempty"`
-	LowStressSeconds      *int `json:"StressLowSeconds,omitempty"`
-	MediumStressSeconds   *int `json:"StressMediumSeconds,omitempty"`
-	HighStressSeconds     *int `json:"StressHighSeconds,omitempty"`
-	SleepNeedMinutes      *int `json:"SleepNeedMinutes,omitempty"`
-	SleepRemTimeSeconds   *int `json:"SleepRemSeconds,omitempty"`
-	SleepDeepTimeSeconds  *int `json:"SleepDeepSeconds,omitempty"`
-	SleepLightTimeSeconds *int `json:"SleepLightSeconds,omitempty"`
-	SleepAwakeTimeSeconds *int `json:"SleepAwakeSeconds,omitempty"`
+	BodyBatteryMin        *int     `json:"BodyBatteryMin,omitempty"`
+	BodyBatterMax         *int     `json:"BodyBatteryMax,omitempty"`
+	RestStressSeconds     *int     `json:"StressRestSeconds,omitempty"`
+	LowStressSeconds      *int     `json:"StressLowSeconds,omitempty"`
+	MediumStressSeconds   *int     `json:"StressMediumSeconds,omitempty"`
+	HighStressSeconds     *int     `json:"StressHighSeconds,omitempty"`
+	SleepNeedMinutes      *int     `json:"SleepNeedMinutes,omitempty"`
+	SleepRemTimeSeconds   *int     `json:"SleepRemSeconds,omitempty"`
+	SleepDeepTimeSeconds  *int     `json:"SleepDeepSeconds,omitempty"`
+	SleepLightTimeSeconds *int     `json:"SleepLightSeconds,omitempty"`
+	SleepAwakeTimeSeconds *int     `json:"SleepAwakeSeconds,omitempty"`
+	CyclingVo2Max         *float64 `json:"CyclingVo2max,omitempty"`
 }
 
 type StressLevel int
