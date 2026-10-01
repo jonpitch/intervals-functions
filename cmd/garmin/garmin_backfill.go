@@ -28,7 +28,8 @@ type WeightSummary struct {
 }
 
 type LatestWeight struct {
-	Weight float64 `json:"weight"`
+	Weight     float64 `json:"weight"`
+	MuscleMass float64 `json:"muscleMass"`
 }
 
 type SleepResponse struct {
@@ -425,13 +426,19 @@ func garminWeightAccumulator(
 	for _, w := range weight {
 		weightInGrams := w.LatestWeight.Weight
 		weight := weightInGrams / 1000
+		muscleMassInGrams := w.LatestWeight.MuscleMass
+		muscleMass := muscleMassInGrams / 1000
 		if record, exists := records[w.SummaryDate]; exists {
 			record.Weight = ptr.Float(weight)
+			if muscleMass != 0 {
+				record.MuscleMass = ptr.Float(muscleMass)
+			}
 			records[w.SummaryDate] = record
 		} else {
 			records[w.SummaryDate] = intervals.WellnessRecord{
-				ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
-				Weight: ptr.CoalesceFloat(weight),
+				ID:         intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
+				Weight:     ptr.CoalesceFloat(weight),
+				MuscleMass: ptr.CoalesceFloat(muscleMass),
 			}
 		}
 	}

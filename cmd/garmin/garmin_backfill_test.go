@@ -653,7 +653,8 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 				{
 					SummaryDate: timeA,
 					LatestWeight: LatestWeight{
-						Weight: 2000,
+						Weight:     2000,
+						MuscleMass: 32000,
 					},
 				},
 			},
@@ -670,6 +671,7 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 					BodyBatteryMin: ptr.Int(30),
 					BodyBatterMax:  ptr.Int(100),
 					Weight:         ptr.Float(2),
+					MuscleMass:     ptr.Float(32),
 				},
 			},
 		},
@@ -679,7 +681,8 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 				{
 					SummaryDate: timeB,
 					LatestWeight: LatestWeight{
-						Weight: 3000,
+						Weight:     3000,
+						MuscleMass: 28000,
 					},
 				},
 			},
@@ -697,13 +700,41 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 					BodyBatterMax:  ptr.Int(100),
 				},
 				timeB: {
-					ID:     intervals.WellnessRecordID("2026-02-01"),
-					Weight: ptr.Float(3),
+					ID:         intervals.WellnessRecordID("2026-02-01"),
+					Weight:     ptr.Float(3),
+					MuscleMass: ptr.Float(28),
 				},
 			},
 		},
 		{
 			// overwrite an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight:     8000,
+						MuscleMass: 35000,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(5.0),
+					MuscleMass: ptr.Float(30.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(8.0),
+					MuscleMass: ptr.Float(35.0),
+				},
+			},
+		},
+		{
+			// a weigh-in that doesn't report body composition (e.g. a scale without that
+			// feature) must not clobber an existing MuscleMass/BodyFat with an explicit zero
 			Entries: []WeightSummary{
 				{
 					SummaryDate: timeA,
@@ -714,14 +745,16 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 			},
 			Wellness: map[GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:     intervals.WellnessRecordID("2026-01-01"),
-					Weight: ptr.Float(5.0),
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(5.0),
+					MuscleMass: ptr.Float(30.0),
 				},
 			},
 			Expected: map[GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:     intervals.WellnessRecordID("2026-01-01"),
-					Weight: ptr.Float(8.0),
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(8.0),
+					MuscleMass: ptr.Float(30.0),
 				},
 			},
 		},

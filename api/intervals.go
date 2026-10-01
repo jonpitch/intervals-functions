@@ -42,6 +42,7 @@ type WellnessRecord struct {
 	RestingHr        *int             `json:"restingHR,omitempty"`
 	Weight           *float64         `json:"weight,omitempty"` // stored in user's measurement preference (kg, lbs)
 	Vo2Max           *float64         `json:"vo2max,omitempty"`
+	BodyFat          *float64         `json:"bodyFat,omitempty"`
 
 	// user subjective attributes
 	// currently only used for weekly digest, so no enums needed
@@ -64,6 +65,7 @@ type WellnessRecord struct {
 	SleepLightTimeSeconds *int     `json:"SleepLightSeconds,omitempty"`
 	SleepAwakeTimeSeconds *int     `json:"SleepAwakeSeconds,omitempty"`
 	CyclingVo2Max         *float64 `json:"CyclingVo2max,omitempty"`
+	MuscleMass            *float64 `json:"MuscleMass,omitempty"`
 }
 
 type StressLevel int

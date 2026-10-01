@@ -239,6 +239,9 @@ type WindowAverage struct {
 	SleepAwakeTimeSeconds AveragedAttribute
 	Vo2Max                AveragedAttribute
 	CyclingVo2Max         AveragedAttribute
+	Weight                AveragedAttribute
+	MuscleMass            AveragedAttribute
+	BodyFat               AveragedAttribute
 }
 
 // windowAverages computes averages for specific wellness attributes across all wellness records
@@ -269,6 +272,12 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	vo2MaxTotal := 0
 	cyclingVo2MaxSum := 0.0
 	cyclingVo2MaxTotal := 0
+	weightSum := 0.0
+	weightTotal := 0
+	muscleMassSum := 0.0
+	muscleMassTotal := 0
+	bodyFatSum := 0.0
+	bodyFatTotal := 0
 
 	var avgRestingHr *float64
 	var avgHrv *float64
@@ -283,6 +292,9 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	var avgSleepAwake *float64
 	var avgVo2Max *float64
 	var avgCyclingVo2Max *float64
+	var avgWeight *float64
+	var avgMuscleMass *float64
+	var avgBodyFat *float64
 	for _, w := range wellness {
 		if w.RestingHr != nil {
 			restingHrSum += *w.RestingHr
@@ -336,6 +348,18 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 			cyclingVo2MaxSum += *w.CyclingVo2Max
 			cyclingVo2MaxTotal++
 		}
+		if w.Weight != nil {
+			weightSum += *w.Weight
+			weightTotal++
+		}
+		if w.MuscleMass != nil {
+			muscleMassSum += *w.MuscleMass
+			muscleMassTotal++
+		}
+		if w.BodyFat != nil {
+			bodyFatSum += *w.BodyFat
+			bodyFatTotal++
+		}
 	}
 
 	if restingHrTotal != 0 {
@@ -376,6 +400,15 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	}
 	if cyclingVo2MaxTotal != 0 {
 		avgCyclingVo2Max = ptr.Float(cyclingVo2MaxSum / float64(cyclingVo2MaxTotal))
+	}
+	if weightTotal != 0 {
+		avgWeight = ptr.Float(weightSum / float64(weightTotal))
+	}
+	if muscleMassTotal != 0 {
+		avgMuscleMass = ptr.Float(muscleMassSum / float64(muscleMassTotal))
+	}
+	if bodyFatTotal != 0 {
+		avgBodyFat = ptr.Float(bodyFatSum / float64(bodyFatTotal))
 	}
 
 	return WindowAverage{
@@ -430,6 +463,18 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 		CyclingVo2Max: AveragedAttribute{
 			Average: avgCyclingVo2Max,
 			Count:   cyclingVo2MaxTotal,
+		},
+		Weight: AveragedAttribute{
+			Average: avgWeight,
+			Count:   weightTotal,
+		},
+		MuscleMass: AveragedAttribute{
+			Average: avgMuscleMass,
+			Count:   muscleMassTotal,
+		},
+		BodyFat: AveragedAttribute{
+			Average: avgBodyFat,
+			Count:   bodyFatTotal,
 		},
 	}
 }
