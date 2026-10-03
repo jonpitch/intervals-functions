@@ -69,25 +69,34 @@ func weeklydigest() (int, error) {
 	today := time.Now()
 	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 
-	// TODO check past week for context note
-	fmt.Println("checking for existing weekly digest...")
-	todaysEvents, err := intervalsClient.ListEventsForDateRange(today, today)
-	if err != nil {
-		return 500, err
-	}
-
-	for _, e := range todaysEvents {
-		if e.Name == noteName {
-			fmt.Println("weekly digest already exists for today, skipping")
-			return 200, nil
-		}
-	}
-
 	// weekly digest executes on monday.
 	// start the day before, to prevent incomplete data
 	// from being considered for insights
 	yesterday := today.AddDate(0, 0, -1)
 	fortyTwoDaysAgo := yesterday.AddDate(0, 0, -42)
+
+	fmt.Println("get events data...")
+	allEvents, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
+	if err != nil {
+		return 500, err
+	}
+
+	fmt.Println("checking for existing weekly digest...")
+	todayStr := today.Format("2006-01-02")
+	events := make([]intervals.Event, 0, len(allEvents))
+	for _, e := range allEvents {
+		if strings.HasPrefix(e.Date, todayStr) {
+			if e.Name == noteName {
+				fmt.Println("weekly digest already exists for today, skipping")
+				return 200, nil
+			}
+			// exclude today's events from history passed to the AI,
+			// matching the previous oldest/yesterday fetch range
+			continue
+		}
+		events = append(events, e)
+	}
+
 	fmt.Println("getting wellness data...")
 	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
@@ -143,12 +152,6 @@ func weeklydigest() (int, error) {
 	}
 
 	activitiesToon, err := toon.JSONToToon(string(activitiesJson))
-	if err != nil {
-		return 500, err
-	}
-
-	fmt.Println("get events data...")
-	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
