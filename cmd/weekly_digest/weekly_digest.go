@@ -69,6 +69,7 @@ func weeklydigest() (int, error) {
 	today := time.Now()
 	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 
+	// TODO check past week for context note
 	fmt.Println("checking for existing weekly digest...")
 	todaysEvents, err := intervalsClient.ListEventsForDateRange(today, today)
 	if err != nil {
@@ -82,9 +83,13 @@ func weeklydigest() (int, error) {
 		}
 	}
 
-	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
+	// weekly digest executes on monday.
+	// start the day before, to prevent incomplete data
+	// from being considered for insights
+	yesterday := today.AddDate(0, 0, -1)
+	fortyTwoDaysAgo := yesterday.AddDate(0, 0, -42)
 	fmt.Println("getting wellness data...")
-	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
+	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
@@ -127,7 +132,7 @@ func weeklydigest() (int, error) {
 	}
 
 	fmt.Println("get activities data...")
-	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, today)
+	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
@@ -143,12 +148,12 @@ func weeklydigest() (int, error) {
 	}
 
 	fmt.Println("get events data...")
-	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
+	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
 
-	events = trimEvents(events, today.AddDate(0, 0, -8))
+	events = trimEvents(events, yesterday.AddDate(0, 0, -8))
 	eventsJson, err := json.Marshal(events)
 	if err != nil {
 		return 500, err
