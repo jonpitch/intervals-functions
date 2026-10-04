@@ -306,6 +306,49 @@ func TestWeeklyAverages(t *testing.T) {
 	}
 }
 
+func TestHasWeeklyDigest(t *testing.T) {
+	name := "digest name"
+	cases := []struct {
+		records  []intervals.Event
+		expected bool
+	}{
+		{
+			records:  []intervals.Event{},
+			expected: false,
+		},
+		{
+			records: []intervals.Event{
+				{
+					Name: "junk 1",
+				},
+				{
+					Name: "junk 2",
+				},
+			},
+			expected: false,
+		},
+		{
+			records: []intervals.Event{
+				{
+					Name: "junk 1",
+				},
+				{
+					Name: name,
+				},
+				{
+					Name: "junk 2",
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, c := range cases {
+		result := hasWeeklyDigest(c.records, name)
+		assert.Equal(t, c.expected, result)
+	}
+}
+
 func TestTrimEvents(t *testing.T) {
 	today := time.Now()
 	dateCutoff := today.AddDate(0, 0, -8)
