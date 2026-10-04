@@ -52,6 +52,11 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 //go:embed weekly_digest_prompt.md
 var weeklyDigestPrompt string
 
+const (
+	weeklyDigestName = "weekly digest"
+	contextName      = "context"
+)
+
 func weeklydigest() (int, error) {
 	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
 	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
@@ -76,25 +81,16 @@ func weeklydigest() (int, error) {
 	fortyTwoDaysAgo := yesterday.AddDate(0, 0, -42)
 
 	fmt.Println("get events data...")
-	allEvents, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
+	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
 		return 500, err
 	}
 
 	fmt.Println("checking for existing weekly digest...")
-	todayStr := today.Format("2006-01-02")
-	events := make([]intervals.Event, 0, len(allEvents))
-	for _, e := range allEvents {
-		if strings.HasPrefix(e.Date, todayStr) {
-			if e.Name == noteName {
-				fmt.Println("weekly digest already exists for today, skipping")
-				return 200, nil
-			}
-			// exclude today's events from history passed to the AI,
-			// matching the previous oldest/yesterday fetch range
-			continue
-		}
-		events = append(events, e)
+	hasWeeklyDigest := hasWeeklyDigest(events, noteName)
+	if hasWeeklyDigest {
+		fmt.Println("weekly digest already exists for today, skipping")
+		return 200, nil
 	}
 
 	fmt.Println("getting wellness data...")
@@ -156,7 +152,7 @@ func weeklydigest() (int, error) {
 		return 500, err
 	}
 
-	events = trimEvents(events, yesterday.AddDate(0, 0, -8))
+	events = refineEvents(events, yesterday.AddDate(0, 0, -8), 250)
 	eventsJson, err := json.Marshal(events)
 	if err != nil {
 		return 500, err
@@ -552,19 +548,49 @@ func trimWellnessRecords(wellness []intervals.WellnessRecord) []intervals.Wellne
 	return wellness
 }
 
-// trimEvents will clamp event content to a character limit to reduce input tokens.
-// it will also drop out any weekly digest event that isn't from last week.
-func trimEvents(
+// hasWeeklyDigest checks if a weekly digest event already exists for the given note name
+func hasWeeklyDigest(events []intervals.Event, noteName string) bool {
+	for _, e := range events {
+		if e.Name == noteName {
+			return true
+		}
+	}
+	return false
+}
+
+// refineEvents filters and refines events to include only relevant context
+// and weekly digest notes within the specified time frame.
+// It also truncates context descriptions to a maximum length.
+func refineEvents(
 	events []intervals.Event,
 	weekAgo time.Time,
+	maxContextLength int,
 ) []intervals.Event {
+	foundAthleteContext := false
 	updated := []intervals.Event{}
 	for _, e := range events {
 		if e.Category != intervals.Note {
 			continue
 		}
 
-		if strings.Contains(e.Name, "Weekly Digest") {
+		name := strings.ToLower(e.Name)
+		if name == contextName && !foundAthleteContext {
+			// has the athlete entered some context for the weekly digest
+			d, err := time.Parse("2006-01-02T15:04:05", e.Date)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			if d.Before(weekAgo) {
+				continue
+			}
+
+			e.Description = string([]rune(e.Description)[0:maxContextLength])
+			updated = append(updated, e)
+			foundAthleteContext = true
+			continue
+		} else if strings.Contains(name, weeklyDigestName) {
 			// if older weekly digest - throw away
 			d, err := time.Parse("2006-01-02T15:04:05", e.Date)
 			if err != nil {
@@ -586,7 +612,6 @@ func trimEvents(
 				updated = append(updated, e)
 				continue
 			}
-
 		} else {
 			continue
 		}

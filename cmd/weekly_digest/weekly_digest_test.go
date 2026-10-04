@@ -336,19 +336,46 @@ func TestTrimEvents(t *testing.T) {
 		// included, only use carryover content, all of it
 		{
 			Category:    intervals.Note,
-			Name:        "Weekly Digest",
+			Name:        "wEeKlY dIgEsT — " + today.Format("2006-01-02"),
 			Date:        recentDate,
 			Description: "before content to ignore <!-- carryover here is important context to use",
 		},
+		// old context - excluded
+		{
+			Category:    intervals.Note,
+			Name:        "Context",
+			Date:        oldDate,
+			Description: "i was sick this week, so i didn't do much",
+		},
+		// relevant context - included
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i was travelling this week. i had a nice trip.",
+		},
+		// additional context - excluded
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i feel much better today.",
+		},
 	}
 
-	result := trimEvents(events, dateCutoff)
+	result := refineEvents(events, dateCutoff, 26)
 	assert.Equal(t, []intervals.Event{
 		{
 			Category:    intervals.Note,
-			Name:        "Weekly Digest",
+			Name:        "wEeKlY dIgEsT — " + today.Format("2006-01-02"),
 			Date:        recentDate,
 			Description: " here is important context to use",
+		},
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i was travelling this week",
 		},
 	}, result)
 }
