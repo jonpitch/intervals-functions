@@ -28,7 +28,8 @@ type WeightSummary struct {
 }
 
 type LatestWeight struct {
-	Weight float64 `json:"weight"`
+	Weight     float64 `json:"weight"`
+	MuscleMass float64 `json:"muscleMass"`
 }
 
 type SleepResponse struct {
@@ -91,6 +92,16 @@ type BodyBatteryValue struct {
 	HighBodyBattery int `json:"highBodyBattery"`
 }
 
+type Vo2Entry struct {
+	Generic Vo2Value `json:"generic"`
+	Cycling Vo2Value `json:"cycling"`
+}
+
+type Vo2Value struct {
+	Date         GarminDate `json:"calendarDate"`
+	PreciseValue float64    `json:"vo2MaxPreciseValue"`
+}
+
 const GarminAPI = "https://connect.garmin.com/gc-api"
 
 type GarminAPIEndpoint string
@@ -101,6 +112,7 @@ const (
 	StressURL      GarminAPIEndpoint = "/usersummary-service/stats/stress/daily"
 	SleepURL       GarminAPIEndpoint = "/sleep-service/stats/sleep/daily"
 	WeightURL      GarminAPIEndpoint = "/weight-service/weight/range"
+	Vo2MaxURL      GarminAPIEndpoint = "/metrics-service/metrics/maxmet/weekly"
 )
 
 type GarminDate struct {
@@ -136,7 +148,7 @@ type GarminOverallAndIndividualResponseData interface {
 }
 
 type GarminArrayResponseData interface {
-	BodyBatteryEntry | RespirationEntry | StressEntry
+	BodyBatteryEntry | RespirationEntry | StressEntry | Vo2Entry
 }
 
 type GarminRequest struct {
@@ -162,7 +174,7 @@ func NewGarminRequest(headers map[string]string, fromDateStr string, toDateStrin
 backfill data from garmin connect to intervals.icu.
 
 signature:
-go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -metric -dry-run bodybattery,stress,respiration,sleep,weight
+go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -metric -dry-run bodybattery,stress,respiration,sleep,weight,vo2max
 */
 func main() {
 	const curlPath = "./request/curl.txt"
@@ -206,6 +218,7 @@ func main() {
 	fetchRespiration := false
 	fetchSleep := false
 	fetchWeight := false
+	fetchVo2 := false
 
 	garminArgs := args[0]
 	garminOptions := strings.Split(garminArgs, ",")
@@ -221,6 +234,8 @@ func main() {
 			fetchSleep = true
 		case "weight":
 			fetchWeight = true
+		case "vo2max":
+			fetchVo2 = true
 		default:
 			log.Fatalf("unknown garmin option")
 		}
@@ -292,6 +307,18 @@ func main() {
 			records,
 			func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
 			garminWeightAccumulator,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if fetchVo2 {
+		records, err = getGarminArrayData(
+			garminRequest,
+			Vo2MaxURL,
+			records,
+			garminVo2Accumulator,
 		)
 		if err != nil {
 			log.Fatal(err)
@@ -399,13 +426,19 @@ func garminWeightAccumulator(
 	for _, w := range weight {
 		weightInGrams := w.LatestWeight.Weight
 		weight := weightInGrams / 1000
+		muscleMassInGrams := w.LatestWeight.MuscleMass
+		muscleMass := muscleMassInGrams / 1000
 		if record, exists := records[w.SummaryDate]; exists {
 			record.Weight = ptr.Float(weight)
+			if muscleMass != 0 {
+				record.MuscleMass = ptr.Float(muscleMass)
+			}
 			records[w.SummaryDate] = record
 		} else {
 			records[w.SummaryDate] = intervals.WellnessRecord{
-				ID:     intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
-				Weight: ptr.CoalesceFloat(weight),
+				ID:         intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
+				Weight:     ptr.CoalesceFloat(weight),
+				MuscleMass: ptr.CoalesceFloat(muscleMass),
 			}
 		}
 	}
@@ -499,6 +532,43 @@ func garminSleepAccumulator(
 				SleepDeepTimeSeconds:  ptr.Int(s.Values.DeepTimeSeconds),
 				SleepLightTimeSeconds: ptr.Int(s.Values.LightTimeSeconds),
 				SleepAwakeTimeSeconds: ptr.Int(s.Values.AwakeTimeSeconds),
+			}
+		}
+	}
+
+	return records
+}
+
+// garminVo2Accumulator converts Vo2Entry records to intervals.WellnessRecord and accumulates
+// them on the provided map. The generic and cycling VO2 max values each carry their own
+// calendarDate, which can differ, so each is upserted against its own date; a zero date
+// (e.g. Garmin returns a null "cycling" object for entries with no cycling VO2 max) is skipped.
+func garminVo2Accumulator(
+	entries []Vo2Entry,
+	records map[GarminDate]intervals.WellnessRecord,
+) map[GarminDate]intervals.WellnessRecord {
+	for _, e := range entries {
+		if !e.Generic.Date.IsZero() {
+			if record, exists := records[e.Generic.Date]; exists {
+				record.Vo2Max = ptr.Float(e.Generic.PreciseValue)
+				records[e.Generic.Date] = record
+			} else {
+				records[e.Generic.Date] = intervals.WellnessRecord{
+					ID:     intervals.WellnessRecordID(e.Generic.Date.Format("2006-01-02")),
+					Vo2Max: ptr.CoalesceFloat(e.Generic.PreciseValue),
+				}
+			}
+		}
+
+		if !e.Cycling.Date.IsZero() {
+			if record, exists := records[e.Cycling.Date]; exists {
+				record.CyclingVo2Max = ptr.Float(e.Cycling.PreciseValue)
+				records[e.Cycling.Date] = record
+			} else {
+				records[e.Cycling.Date] = intervals.WellnessRecord{
+					ID:            intervals.WellnessRecordID(e.Cycling.Date.Format("2006-01-02")),
+					CyclingVo2Max: ptr.CoalesceFloat(e.Cycling.PreciseValue),
+				}
 			}
 		}
 	}
@@ -683,6 +753,8 @@ func garminApiToLabel(api GarminAPIEndpoint) string {
 		return "sleep"
 	case WeightURL:
 		return "weight"
+	case Vo2MaxURL:
+		return "vo2max"
 	default:
 		return ""
 	}

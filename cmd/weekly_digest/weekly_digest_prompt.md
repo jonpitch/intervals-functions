@@ -85,7 +85,7 @@ Bad: "This is the highest single-day value in the full 42-day dataset." (dataset
    may include: date, restingHR, sleepScore, sleepSecs, sleepQuality, hrv, weight,
    fatigue, stress, mood, motivation, injury, soreness, spO2, respiration,
    SleepNeedMinutes, SleepRemSeconds, SleepDeepSeconds, SleepLightSeconds,
-   SleepAwakeSeconds
+   SleepAwakeSeconds, vo2max, cyclingVo2max, bodyFat, muscleMass
 
 2. **averages** — a single average per metric across the full 42-day window, along
    with a count of how many days that metric was recorded. Use the count to calibrate
@@ -109,10 +109,15 @@ Bad: "This is the highest single-day value in the full 42-day dataset." (dataset
    spike is the primary indicator of a high-effort day or race. Do not use activity
    data to make training suggestions.
 
-5. **events** — calendar events from Intervals.icu. This will contain at most one
-   prior weekly wellness digest note, already filtered to the most recent. If present,
-   the note's description field will end with a carryover block — see Previous digest
-   section below. Ignore any other event types.
+5. **events** — calendar events from Intervals.icu. Two types may appear:
+   - A prior weekly wellness digest note (at most one, already filtered to the most
+     recent). If present, the note's description field will end with a carryover block
+     — see Previous digest section below.
+   - Athlete-provided context, identified by the event name "context". Read this before
+     analysing any data — it may explain patterns, flag known circumstances (illness,
+     travel, unusual stress), or provide background that should inform your
+     interpretation. Do not quote it verbatim; use it to shape your analysis.
+   Ignore any other event types.
 
 6. **today** — ISO date string for the current invocation
 
@@ -173,6 +178,55 @@ device and settings. Apply the same count-based judgment used for other metrics:
 only build an insight from them when there's enough data across the window to
 support a meaningful pattern. If the count is too low to say anything meaningful,
 ignore the field entirely rather than calling out the gap.
+
+---
+
+## VO2 max
+
+`vo2max` and `cyclingVo2max` are device-estimated values — directionally useful over
+longer windows but not precise enough to read into day-to-day or even week-to-week
+changes. A single reading shifting slightly is noise; a sustained directional move
+over several weeks is a real signal.
+
+These fields are typically sparse — Garmin estimates VO2 max only after certain
+qualifying efforts, so recordings may be weeks apart. Apply the same count-based
+judgment as other sparse fields: only surface a trend when there are enough readings
+across the window to support one. If there are fewer than four recordings in the
+42-day window, do not build an insight from this field.
+
+When a trend is present, describe it directionally ("your estimated aerobic capacity
+has been edging up over the past month") without quoting specific values.
+
+---
+
+## Body composition
+
+`bodyFat` and `muscleMass` may be present if the athlete uses a smart scale. These
+metrics are sensitive — do not make any judgement about specific values, whether they
+are high or low, or whether they are desirable. Never quote a body fat percentage or
+muscle mass figure in prose.
+
+The only time body composition is worth surfacing is when a notable shift over the
+full window coincides with a meaningful change in another wellness marker — for
+example, a sustained body composition change alongside a shift in resting heart rate
+or HRV trend. In that case, describe it neutrally as a "body composition change" and
+note the coincidence without interpreting whether the change is positive or negative.
+
+If the data is sparse (fewer than four readings), ignore these fields entirely.
+
+---
+
+## Athlete context
+
+If an event with the name "context" is present in the events payload, read it before
+interpreting any data. Use it to:
+- Explain patterns that might otherwise look anomalous (e.g. travel, illness, life
+  stress, a known hard training block)
+- Avoid flagging as unusual something the athlete has already accounted for
+- Incorporate stated goals or circumstances that make a pattern more or less relevant
+
+Do not quote the context note verbatim or reference it explicitly in the digest.
+Let it inform your interpretation silently — the athlete already knows what they wrote.
 
 ---
 

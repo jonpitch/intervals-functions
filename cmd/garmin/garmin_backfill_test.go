@@ -653,7 +653,8 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 				{
 					SummaryDate: timeA,
 					LatestWeight: LatestWeight{
-						Weight: 2000,
+						Weight:     2000,
+						MuscleMass: 32000,
 					},
 				},
 			},
@@ -670,6 +671,7 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 					BodyBatteryMin: ptr.Int(30),
 					BodyBatterMax:  ptr.Int(100),
 					Weight:         ptr.Float(2),
+					MuscleMass:     ptr.Float(32),
 				},
 			},
 		},
@@ -679,7 +681,8 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 				{
 					SummaryDate: timeB,
 					LatestWeight: LatestWeight{
-						Weight: 3000,
+						Weight:     3000,
+						MuscleMass: 28000,
 					},
 				},
 			},
@@ -697,13 +700,41 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 					BodyBatterMax:  ptr.Int(100),
 				},
 				timeB: {
-					ID:     intervals.WellnessRecordID("2026-02-01"),
-					Weight: ptr.Float(3),
+					ID:         intervals.WellnessRecordID("2026-02-01"),
+					Weight:     ptr.Float(3),
+					MuscleMass: ptr.Float(28),
 				},
 			},
 		},
 		{
 			// overwrite an existing record
+			Entries: []WeightSummary{
+				{
+					SummaryDate: timeA,
+					LatestWeight: LatestWeight{
+						Weight:     8000,
+						MuscleMass: 35000,
+					},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(5.0),
+					MuscleMass: ptr.Float(30.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(8.0),
+					MuscleMass: ptr.Float(35.0),
+				},
+			},
+		},
+		{
+			// a weigh-in that doesn't report body composition (e.g. a scale without that
+			// feature) must not clobber an existing MuscleMass/BodyFat with an explicit zero
 			Entries: []WeightSummary{
 				{
 					SummaryDate: timeA,
@@ -714,14 +745,16 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 			},
 			Wellness: map[GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:     intervals.WellnessRecordID("2026-01-01"),
-					Weight: ptr.Float(5.0),
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(5.0),
+					MuscleMass: ptr.Float(30.0),
 				},
 			},
 			Expected: map[GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:     intervals.WellnessRecordID("2026-01-01"),
-					Weight: ptr.Float(8.0),
+					ID:         intervals.WellnessRecordID("2026-01-01"),
+					Weight:     ptr.Float(8.0),
+					MuscleMass: ptr.Float(30.0),
 				},
 			},
 		},
@@ -756,6 +789,114 @@ func TestGarminSleepQualityToIntervals(t *testing.T) {
 	}
 }
 
+func TestGarminVo2Accumulator(t *testing.T) {
+	timeA := GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+	timeC := GarminDate{Time: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []Vo2Entry
+		Wellness map[GarminDate]intervals.WellnessRecord
+		Expected map[GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []Vo2Entry{},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// generic and cycling share the same date: update an existing record
+			Entries: []Vo2Entry{
+				{
+					Generic: Vo2Value{Date: timeA, PreciseValue: 51.6},
+					Cycling: Vo2Value{Date: timeA, PreciseValue: 53.1},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:             intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin: ptr.Int(30),
+					BodyBatterMax:  ptr.Int(100),
+					Vo2Max:         ptr.Float(51.6),
+					CyclingVo2Max:  ptr.Float(53.1),
+				},
+			},
+		},
+		{
+			// generic and cycling have different dates: each is added as its own record
+			Entries: []Vo2Entry{
+				{
+					Generic: Vo2Value{Date: timeB, PreciseValue: 51.5},
+					Cycling: Vo2Value{Date: timeC, PreciseValue: 53.0},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeB: {
+					ID:     intervals.WellnessRecordID("2026-02-01"),
+					Vo2Max: ptr.Float(51.5),
+				},
+				timeC: {
+					ID:            intervals.WellnessRecordID("2026-03-01"),
+					CyclingVo2Max: ptr.Float(53.0),
+				},
+			},
+		},
+		{
+			// cycling is missing (Garmin returns a null "cycling" object): only generic is applied
+			Entries: []Vo2Entry{
+				{
+					Generic: Vo2Value{Date: timeA, PreciseValue: 51.5},
+					Cycling: Vo2Value{},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:     intervals.WellnessRecordID("2026-01-01"),
+					Vo2Max: ptr.Float(51.5),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []Vo2Entry{
+				{
+					Generic: Vo2Value{Date: timeA, PreciseValue: 45.0},
+					Cycling: Vo2Value{Date: timeA, PreciseValue: 47.0},
+				},
+			},
+			Wellness: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:            intervals.WellnessRecordID("2026-01-01"),
+					Vo2Max:        ptr.Float(51.5),
+					CyclingVo2Max: ptr.Float(53.0),
+				},
+			},
+			Expected: map[GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:            intervals.WellnessRecordID("2026-01-01"),
+					Vo2Max:        ptr.Float(45.0),
+					CyclingVo2Max: ptr.Float(47.0),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminVo2Accumulator(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
 func TestGarminApiEndpointLabel(t *testing.T) {
 	cases := []struct {
 		Endpoint GarminAPIEndpoint
@@ -766,6 +907,7 @@ func TestGarminApiEndpointLabel(t *testing.T) {
 		{Endpoint: RespirationURL, Expected: "respiration"},
 		{Endpoint: SleepURL, Expected: "sleep"},
 		{Endpoint: WeightURL, Expected: "weight"},
+		{Endpoint: Vo2MaxURL, Expected: "vo2max"},
 	}
 
 	for _, c := range cases {

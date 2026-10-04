@@ -94,6 +94,11 @@ func TestWindowAverages(t *testing.T) {
 					SleepDeepTimeSeconds:  ptr.Int(3000),
 					SleepLightTimeSeconds: ptr.Int(5000),
 					SleepAwakeTimeSeconds: ptr.Int(600),
+					Vo2Max:                ptr.Float(51.0),
+					CyclingVo2Max:         ptr.Float(53.0),
+					Weight:                ptr.Float(70.0),
+					MuscleMass:            ptr.Float(32.0),
+					BodyFat:               ptr.Float(18.0),
 				},
 				{
 					RestingHr:             ptr.Int(2),
@@ -107,6 +112,11 @@ func TestWindowAverages(t *testing.T) {
 					SleepDeepTimeSeconds:  ptr.Int(3200),
 					SleepLightTimeSeconds: ptr.Int(5200),
 					SleepAwakeTimeSeconds: ptr.Int(800),
+					Vo2Max:                ptr.Float(53.0),
+					CyclingVo2Max:         ptr.Float(55.0),
+					Weight:                ptr.Float(72.0),
+					MuscleMass:            ptr.Float(34.0),
+					BodyFat:               ptr.Float(20.0),
 				},
 			},
 			expected: WindowAverage{
@@ -152,6 +162,26 @@ func TestWindowAverages(t *testing.T) {
 				},
 				SleepAwakeTimeSeconds: AveragedAttribute{
 					Average: ptr.Float(700.0),
+					Count:   2,
+				},
+				Vo2Max: AveragedAttribute{
+					Average: ptr.Float(52.0),
+					Count:   2,
+				},
+				CyclingVo2Max: AveragedAttribute{
+					Average: ptr.Float(54.0),
+					Count:   2,
+				},
+				Weight: AveragedAttribute{
+					Average: ptr.Float(71.0),
+					Count:   2,
+				},
+				MuscleMass: AveragedAttribute{
+					Average: ptr.Float(33.0),
+					Count:   2,
+				},
+				BodyFat: AveragedAttribute{
+					Average: ptr.Float(19.0),
 					Count:   2,
 				},
 			},
@@ -276,6 +306,49 @@ func TestWeeklyAverages(t *testing.T) {
 	}
 }
 
+func TestHasWeeklyDigest(t *testing.T) {
+	name := "digest name"
+	cases := []struct {
+		records  []intervals.Event
+		expected bool
+	}{
+		{
+			records:  []intervals.Event{},
+			expected: false,
+		},
+		{
+			records: []intervals.Event{
+				{
+					Name: "junk 1",
+				},
+				{
+					Name: "junk 2",
+				},
+			},
+			expected: false,
+		},
+		{
+			records: []intervals.Event{
+				{
+					Name: "junk 1",
+				},
+				{
+					Name: name,
+				},
+				{
+					Name: "junk 2",
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, c := range cases {
+		result := hasWeeklyDigest(c.records, name)
+		assert.Equal(t, c.expected, result)
+	}
+}
+
 func TestTrimEvents(t *testing.T) {
 	today := time.Now()
 	dateCutoff := today.AddDate(0, 0, -8)
@@ -306,19 +379,46 @@ func TestTrimEvents(t *testing.T) {
 		// included, only use carryover content, all of it
 		{
 			Category:    intervals.Note,
-			Name:        "Weekly Digest",
+			Name:        "wEeKlY dIgEsT — " + today.Format("2006-01-02"),
 			Date:        recentDate,
 			Description: "before content to ignore <!-- carryover here is important context to use",
 		},
+		// old context - excluded
+		{
+			Category:    intervals.Note,
+			Name:        "Context",
+			Date:        oldDate,
+			Description: "i was sick this week, so i didn't do much",
+		},
+		// relevant context - included
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i was travelling this week. i had a nice trip.",
+		},
+		// additional context - excluded
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i feel much better today.",
+		},
 	}
 
-	result := trimEvents(events, dateCutoff)
+	result := refineEvents(events, dateCutoff, 26)
 	assert.Equal(t, []intervals.Event{
 		{
 			Category:    intervals.Note,
-			Name:        "Weekly Digest",
+			Name:        "wEeKlY dIgEsT — " + today.Format("2006-01-02"),
 			Date:        recentDate,
 			Description: " here is important context to use",
+		},
+		{
+			Category:    intervals.Note,
+			Name:        "cOnTeXt",
+			Date:        recentDate,
+			Description: "i was travelling this week",
 		},
 	}, result)
 }

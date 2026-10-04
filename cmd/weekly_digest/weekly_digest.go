@@ -52,6 +52,11 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 //go:embed weekly_digest_prompt.md
 var weeklyDigestPrompt string
 
+const (
+	weeklyDigestName = "weekly digest"
+	contextName      = "context"
+)
+
 func weeklydigest() (int, error) {
 	intervalsApiKey := os.Getenv("INTERVALS_API_KEY")
 	intervalsAthleteID := os.Getenv("INTERVALS_ATHLETE_ID")
@@ -69,22 +74,27 @@ func weeklydigest() (int, error) {
 	today := time.Now()
 	noteName := "🤖 Weekly Digest — " + today.Format("2006-01-02")
 
-	fmt.Println("checking for existing weekly digest...")
-	todaysEvents, err := intervalsClient.ListEventsForDateRange(today, today)
+	// weekly digest executes on monday.
+	// start the day before, to prevent incomplete data
+	// from being considered for insights
+	yesterday := today.AddDate(0, 0, -1)
+	fortyTwoDaysAgo := yesterday.AddDate(0, 0, -42)
+
+	fmt.Println("get events data...")
+	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
 	if err != nil {
 		return 500, err
 	}
 
-	for _, e := range todaysEvents {
-		if e.Name == noteName {
-			fmt.Println("weekly digest already exists for today, skipping")
-			return 200, nil
-		}
+	fmt.Println("checking for existing weekly digest...")
+	hasWeeklyDigest := hasWeeklyDigest(events, noteName)
+	if hasWeeklyDigest {
+		fmt.Println("weekly digest already exists for today, skipping")
+		return 200, nil
 	}
 
-	fortyTwoDaysAgo := time.Now().AddDate(0, 0, -42)
 	fmt.Println("getting wellness data...")
-	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, today)
+	wellness, err := intervalsClient.ListWellnessRecordsForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
@@ -127,7 +137,7 @@ func weeklydigest() (int, error) {
 	}
 
 	fmt.Println("get activities data...")
-	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, today)
+	activities, err := intervalsClient.ListActivitiesForDateRange(fortyTwoDaysAgo, yesterday)
 	if err != nil {
 		return 500, err
 	}
@@ -142,13 +152,7 @@ func weeklydigest() (int, error) {
 		return 500, err
 	}
 
-	fmt.Println("get events data...")
-	events, err := intervalsClient.ListEventsForDateRange(fortyTwoDaysAgo, today)
-	if err != nil {
-		return 500, err
-	}
-
-	events = trimEvents(events, today.AddDate(0, 0, -8))
+	events = refineEvents(events, yesterday.AddDate(0, 0, -8), 250)
 	eventsJson, err := json.Marshal(events)
 	if err != nil {
 		return 500, err
@@ -237,6 +241,11 @@ type WindowAverage struct {
 	SleepDeepTimeSeconds  AveragedAttribute
 	SleepLightTimeSeconds AveragedAttribute
 	SleepAwakeTimeSeconds AveragedAttribute
+	Vo2Max                AveragedAttribute
+	CyclingVo2Max         AveragedAttribute
+	Weight                AveragedAttribute
+	MuscleMass            AveragedAttribute
+	BodyFat               AveragedAttribute
 }
 
 // windowAverages computes averages for specific wellness attributes across all wellness records
@@ -263,6 +272,16 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	sleepLightTotal := 0
 	sleepAwakeSum := 0
 	sleepAwakeTotal := 0
+	vo2MaxSum := 0.0
+	vo2MaxTotal := 0
+	cyclingVo2MaxSum := 0.0
+	cyclingVo2MaxTotal := 0
+	weightSum := 0.0
+	weightTotal := 0
+	muscleMassSum := 0.0
+	muscleMassTotal := 0
+	bodyFatSum := 0.0
+	bodyFatTotal := 0
 
 	var avgRestingHr *float64
 	var avgHrv *float64
@@ -275,6 +294,11 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	var avgSleepDeep *float64
 	var avgSleepLight *float64
 	var avgSleepAwake *float64
+	var avgVo2Max *float64
+	var avgCyclingVo2Max *float64
+	var avgWeight *float64
+	var avgMuscleMass *float64
+	var avgBodyFat *float64
 	for _, w := range wellness {
 		if w.RestingHr != nil {
 			restingHrSum += *w.RestingHr
@@ -320,6 +344,26 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 			sleepAwakeSum += *w.SleepAwakeTimeSeconds
 			sleepAwakeTotal++
 		}
+		if w.Vo2Max != nil {
+			vo2MaxSum += *w.Vo2Max
+			vo2MaxTotal++
+		}
+		if w.CyclingVo2Max != nil {
+			cyclingVo2MaxSum += *w.CyclingVo2Max
+			cyclingVo2MaxTotal++
+		}
+		if w.Weight != nil {
+			weightSum += *w.Weight
+			weightTotal++
+		}
+		if w.MuscleMass != nil {
+			muscleMassSum += *w.MuscleMass
+			muscleMassTotal++
+		}
+		if w.BodyFat != nil {
+			bodyFatSum += *w.BodyFat
+			bodyFatTotal++
+		}
 	}
 
 	if restingHrTotal != 0 {
@@ -354,6 +398,21 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 	}
 	if sleepAwakeTotal != 0 {
 		avgSleepAwake = ptr.Float(float64(sleepAwakeSum) / float64(sleepAwakeTotal))
+	}
+	if vo2MaxTotal != 0 {
+		avgVo2Max = ptr.Float(vo2MaxSum / float64(vo2MaxTotal))
+	}
+	if cyclingVo2MaxTotal != 0 {
+		avgCyclingVo2Max = ptr.Float(cyclingVo2MaxSum / float64(cyclingVo2MaxTotal))
+	}
+	if weightTotal != 0 {
+		avgWeight = ptr.Float(weightSum / float64(weightTotal))
+	}
+	if muscleMassTotal != 0 {
+		avgMuscleMass = ptr.Float(muscleMassSum / float64(muscleMassTotal))
+	}
+	if bodyFatTotal != 0 {
+		avgBodyFat = ptr.Float(bodyFatSum / float64(bodyFatTotal))
 	}
 
 	return WindowAverage{
@@ -400,6 +459,26 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 		SleepAwakeTimeSeconds: AveragedAttribute{
 			Average: avgSleepAwake,
 			Count:   sleepAwakeTotal,
+		},
+		Vo2Max: AveragedAttribute{
+			Average: avgVo2Max,
+			Count:   vo2MaxTotal,
+		},
+		CyclingVo2Max: AveragedAttribute{
+			Average: avgCyclingVo2Max,
+			Count:   cyclingVo2MaxTotal,
+		},
+		Weight: AveragedAttribute{
+			Average: avgWeight,
+			Count:   weightTotal,
+		},
+		MuscleMass: AveragedAttribute{
+			Average: avgMuscleMass,
+			Count:   muscleMassTotal,
+		},
+		BodyFat: AveragedAttribute{
+			Average: avgBodyFat,
+			Count:   bodyFatTotal,
 		},
 	}
 }
@@ -469,19 +548,49 @@ func trimWellnessRecords(wellness []intervals.WellnessRecord) []intervals.Wellne
 	return wellness
 }
 
-// trimEvents will clamp event content to a character limit to reduce input tokens.
-// it will also drop out any weekly digest event that isn't from last week.
-func trimEvents(
+// hasWeeklyDigest checks if a weekly digest event already exists for the given note name
+func hasWeeklyDigest(events []intervals.Event, noteName string) bool {
+	for _, e := range events {
+		if e.Name == noteName {
+			return true
+		}
+	}
+	return false
+}
+
+// refineEvents filters and refines events to include only relevant context
+// and weekly digest notes within the specified time frame.
+// It also truncates context descriptions to a maximum length.
+func refineEvents(
 	events []intervals.Event,
 	weekAgo time.Time,
+	maxContextLength int,
 ) []intervals.Event {
+	foundAthleteContext := false
 	updated := []intervals.Event{}
 	for _, e := range events {
 		if e.Category != intervals.Note {
 			continue
 		}
 
-		if strings.Contains(e.Name, "Weekly Digest") {
+		name := strings.ToLower(e.Name)
+		if name == contextName && !foundAthleteContext {
+			// has the athlete entered some context for the weekly digest
+			d, err := time.Parse("2006-01-02T15:04:05", e.Date)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			if d.Before(weekAgo) {
+				continue
+			}
+
+			e.Description = string([]rune(e.Description)[0:maxContextLength])
+			updated = append(updated, e)
+			foundAthleteContext = true
+			continue
+		} else if strings.Contains(name, weeklyDigestName) {
 			// if older weekly digest - throw away
 			d, err := time.Parse("2006-01-02T15:04:05", e.Date)
 			if err != nil {
@@ -503,7 +612,6 @@ func trimEvents(
 				updated = append(updated, e)
 				continue
 			}
-
 		} else {
 			continue
 		}
