@@ -586,7 +586,11 @@ func refineEvents(
 				continue
 			}
 
-			e.Description = string([]rune(e.Description)[0:maxContextLength])
+			description := []rune(e.Description)
+			if len(description) > maxContextLength {
+				description = description[:maxContextLength]
+			}
+			e.Description = string(description)
 			updated = append(updated, e)
 			foundAthleteContext = true
 			continue
