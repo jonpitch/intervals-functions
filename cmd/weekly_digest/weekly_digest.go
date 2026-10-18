@@ -53,8 +53,9 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 var weeklyDigestPrompt string
 
 const (
-	weeklyDigestName = "weekly digest"
-	contextName      = "context"
+	weeklyDigestName   = "weekly digest"
+	contextName        = "context"
+	contextPlaceholder = "put your context here"
 )
 
 func weeklydigest() (int, error) {
@@ -214,6 +215,17 @@ func weeklydigest() (int, error) {
 		Name:        noteName,
 		Category:    intervals.Note,
 		Description: modelResponse,
+	})
+
+	if err != nil {
+		return 500, err
+	}
+
+	err = intervalsClient.CreateEvent(intervals.Event{
+		Date:        today.Format("2006-01-02T00:00:00"),
+		Name:        contextName,
+		Category:    intervals.Note,
+		Description: contextPlaceholder,
 	})
 
 	if err != nil {
@@ -583,6 +595,10 @@ func refineEvents(
 			}
 
 			if d.Before(weekAgo) {
+				continue
+			}
+
+			if e.Description == contextPlaceholder {
 				continue
 			}
 
