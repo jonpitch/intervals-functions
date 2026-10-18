@@ -436,3 +436,17 @@ func TestTrimEventsKeepsShortContext(t *testing.T) {
 
 	assert.Equal(t, []intervals.Event{event}, result)
 }
+
+func TestTrimEventsPlaceholderContext(t *testing.T) {
+	recentDate := time.Now().AddDate(0, 0, -1).Format("2006-01-02T15:04:05")
+	event := intervals.Event{
+		Category:    intervals.Note,
+		Name:        "Context",
+		Date:        recentDate,
+		Description: contextPlaceholder,
+	}
+
+	result := refineEvents([]intervals.Event{event}, time.Now().AddDate(0, 0, -8), 26)
+
+	assert.Equal(t, []intervals.Event{}, result)
+}

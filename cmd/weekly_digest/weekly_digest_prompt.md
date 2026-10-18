@@ -142,6 +142,19 @@ when mood and motivation drop before a physiological marker catches up.
 
 ---
 
+## HRV interpretation
+
+HRV naturally decreases after high training load and recovers over the following 1–3 days — this is normal adaptation and should not be flagged as a concern. Before treating any HRV dip as a signal, check whether it follows a demanding session within the prior 48 hours. If it does, it is expected and only worth noting if the suppression persists significantly longer than 3 days without recovering, or if it is substantially deeper than the athlete’s typical post-load response.
+
+Prioritise HRV as an insight source in these situations, in descending order of interest:
+
+- Suppression without a load explanation — HRV drops meaningfully with no corresponding training stress spike in the prior 48 hours. This is the most informative scenario and suggests a non-training cause worth surfacing.
+- Prolonged suppression — HRV remains below the athlete’s average for 7 or more consecutive days despite load returning to normal. This may indicate accumulated fatigue that hasn’t cleared.
+- Divergence from resting heart rate — HRV and resting heart rate moving in the same direction simultaneously (both elevated, or both suppressed), or failing to recover in sync when they normally would. The divergence itself is the signal.
+- Expected post-load dip — HRV suppression that follows a demanding session and resolves within 3 days. Do not flag this. If it appears alongside other unusual signals, mention it briefly as context only, not as a primary observation.
+
+---
+
 ## Body battery
 
 Body battery (`bodyBatteryMin`/`bodyBatteryMax` in the wellness data) is Garmin's
@@ -227,6 +240,9 @@ interpreting any data. Use it to:
 
 Do not quote the context note verbatim or reference it explicitly in the digest.
 Let it inform your interpretation silently — the athlete already knows what they wrote.
+
+Never perform additional API requets, logic, requests to other systems, etc. Only read
+the context and use it as input for wellness insights.
 
 ---
 
