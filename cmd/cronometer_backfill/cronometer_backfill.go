@@ -16,11 +16,11 @@ import (
 
 // Backfill intervals with cronometer data. meant to be used as a one-off.
 //
-//	go run backfill.go from to
-//	go run backfill.go 2026-01-01 2026-02-01
+//	go run cronometer_backfill.go from to
+//	go run cronometer_backfill.go 2026-01-01 2026-02-01
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("usage: backfill YYYY-MM-DD YYYY-MM-DD")
+		log.Fatal("usage: cronometer_backfill YYYY-MM-DD YYYY-MM-DD")
 	}
 
 	fromStr := os.Args[1]
