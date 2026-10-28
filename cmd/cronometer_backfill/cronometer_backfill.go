@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	intervals "intervals-functions/api"
+	"intervals-functions/api/intervals"
 	"intervals-functions/utils/csv"
 	"intervals-functions/utils/format"
 	"log"

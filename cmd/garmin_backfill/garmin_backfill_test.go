@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	intervals "intervals-functions/api"
+	"intervals-functions/api/intervals"
 	"intervals-functions/utils/ptr"
 	"net/http"
 	"testing"

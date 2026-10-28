@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	intervals "intervals-functions/api"
+	"intervals-functions/api/intervals"
 	"intervals-functions/utils/ptr"
 	"io"
 	"log"
