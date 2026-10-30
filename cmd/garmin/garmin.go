@@ -63,9 +63,43 @@ func garminToIntervals() (int, error) {
 		return 500, fmt.Errorf("get daily sleep: %w", err)
 	}
 
-	// TODO decision - make requests to summary APIs or individual?
-	// there's no vo2 max?
-	fmt.Println(sleepResponse.SleepTimeSeconds)
+	dailySummaryResponse, err := garminClient.GetDailySummary(yesterday, yesterday)
+	if err != nil {
+		return 500, fmt.Errorf("get daily summary: %w", err)
+	}
+
+	stressResponse, err := garminClient.GetDailyStress(yesterday, yesterday)
+	if err != nil {
+		return 500, fmt.Errorf("get daily stress: %w", err)
+	}
+
+	weightResponse, err := garminClient.GetWeight(yesterday, yesterday)
+	if err != nil {
+		return 500, fmt.Errorf("get weight: %w", err)
+	}
+
+	fmt.Println("-- sleep")
+	fmt.Printf("light: %d\n", sleepResponse.LightSleepSeconds)
+	fmt.Printf("deep: %d\n", sleepResponse.DeepSleepSeconds)
+	fmt.Printf("rem: %d\n", sleepResponse.RemSleepSeconds)
+	fmt.Printf("awake: %d\n", sleepResponse.AwakeSleepSeconds)
+	fmt.Printf("baseline: %d\n", sleepResponse.SleepNeed.BaselineMinutes)
+	fmt.Printf("actual: %d\n", sleepResponse.SleepNeed.ActualMinutes)
+	fmt.Println("-- body battery")
+	fmt.Printf("min bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MinValue)
+	fmt.Printf("max bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MaxValue)
+	fmt.Println("-- stress")
+	fmt.Printf("overall: %d\n", stressResponse[0].Values.OverallStressLevel)
+	fmt.Printf("rest: %d\n", stressResponse[0].Values.RestStressDurationSeconds)
+	fmt.Printf("low: %d\n", stressResponse[0].Values.LowStressDurationSeconds)
+	fmt.Printf("med: %d\n", stressResponse[0].Values.MediumStressDurationSeconds)
+	fmt.Printf("high: %d\n", stressResponse[0].Values.HighStressDurationSeconds)
+	fmt.Println("-- weight")
+	fmt.Printf("weight: %f\n", weightResponse.DailyWeightSummaries[0].LatestWeight.WeightInGrams)
+	fmt.Printf("muscle: %d\n", weightResponse.DailyWeightSummaries[0].LatestWeight.MuscleMassInGrams)
+	fmt.Printf("fat: %f\n", weightResponse.DailyWeightSummaries[0].LatestWeight.BodyFat)
+
+	// TODO upate intervals wellness record
 
 	return 200, nil
 }
