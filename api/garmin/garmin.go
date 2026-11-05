@@ -25,60 +25,50 @@ func NewGarminClient(apiKey string) (GarminClient, error) {
 	return GarminClient{token: token}, nil
 }
 
-type SleepNeed struct {
-	BaselineMinutes int `json:"baseline"`
-	ActualMinutes   int `json:"actual"`
-}
-
 type DailySleepResponse struct {
-	CalendarDate       string    `json:"calendarDate"`
-	SleepTimeSeconds   int       `json:"sleepTimeSeconds"`
-	AverageRespiration float64   `json:"averageRespirationValue"`
-	DeepSleepSeconds   int       `json:"deepSleepSeconds"`
-	LightSleepSeconds  int       `json:"lightSleepSeconds"`
-	RemSleepSeconds    int       `json:"remSleepSeconds"`
-	AwakeSleepSeconds  int       `json:"awakeSleepSeconds"`
-	SleepNeed          SleepNeed `json:"sleepNeed"`
-}
-
-type DailySummary struct {
-	CalendarDate string `json:"calendarDate"`
-	BodyBattery  struct {
-		MinValue int `json:"minValue"`
-		MaxValue int `json:"maxValue"`
-	} `json:"bodybattery"`
+	CalendarDate       string  `json:"calendarDate"`
+	SleepTimeSeconds   int     `json:"sleepTimeSeconds"`
+	AverageRespiration float64 `json:"averageRespirationValue"`
+	DeepSleepSeconds   int     `json:"deepSleepSeconds"`
+	LightSleepSeconds  int     `json:"lightSleepSeconds"`
+	RemSleepSeconds    int     `json:"remSleepSeconds"`
+	AwakeSleepSeconds  int     `json:"awakeSleepSeconds"`
+	SleepNeed          struct {
+		BaselineMinutes int `json:"baseline"`
+		ActualMinutes   int `json:"actual"`
+	} `json:"sleepNeed"`
 }
 
 type DailySummaryResponse struct {
-	Data []DailySummary `json:"data"`
-}
-
-type DailyStressValues struct {
-	OverallStressLevel          int `json:"overallStressLevel"`
-	HighStressDurationSeconds   int `json:"highStressDuration"`
-	LowStressDurationSeconds    int `json:"lowStressDuration"`
-	RestStressDurationSeconds   int `json:"restStressDuration"`
-	MediumStressDurationSeconds int `json:"mediumStressDuration"`
+	Data []struct {
+		CalendarDate string `json:"calendarDate"`
+		BodyBattery  struct {
+			MinValue int `json:"minValue"`
+			MaxValue int `json:"maxValue"`
+		} `json:"bodybattery"`
+	} `json:"data"`
 }
 
 type DailyStressResponse []struct {
-	CalendarDate string            `json:"calendarDate"`
-	Values       DailyStressValues `json:"values"`
-}
-
-type WeightMeasurement struct {
-	CalendarDate      string  `json:"calendarDate"`
-	WeightInGrams     float64 `json:"weight"`
-	BodyFat           float64 `json:"bodyFat"`
-	MuscleMassInGrams int     `json:"muscleMass"`
-}
-
-type WeightSummary struct {
-	LatestWeight WeightMeasurement `json:"latestWeight"`
+	CalendarDate string `json:"calendarDate"`
+	Values       struct {
+		OverallStressLevel          int `json:"overallStressLevel"`
+		HighStressDurationSeconds   int `json:"highStressDuration"`
+		LowStressDurationSeconds    int `json:"lowStressDuration"`
+		RestStressDurationSeconds   int `json:"restStressDuration"`
+		MediumStressDurationSeconds int `json:"mediumStressDuration"`
+	} `json:"values"`
 }
 
 type WeightResponse struct {
-	DailyWeightSummaries []WeightSummary `json:"dailyWeightSummaries"`
+	DailyWeightSummaries []struct {
+		LatestWeight struct {
+			CalendarDate      string  `json:"calendarDate"`
+			WeightInGrams     float64 `json:"weight"`
+			BodyFat           float64 `json:"bodyFat"`
+			MuscleMassInGrams int     `json:"muscleMass"`
+		} `json:"latestWeight"`
+	} `json:"dailyWeightSummaries"`
 }
 
 // GetDailySleepSummariesByDate retrieves daily sleep data for a date range from the Garmin API.
