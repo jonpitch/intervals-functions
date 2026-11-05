@@ -42,7 +42,8 @@ type DailySleepResponse struct {
 }
 
 type DailySummary struct {
-	BodyBattery struct {
+	CalendarDate string `json:"calendarDate"`
+	BodyBattery  struct {
 		MinValue int `json:"minValue"`
 		MaxValue int `json:"maxValue"`
 	} `json:"bodybattery"`
@@ -66,6 +67,7 @@ type DailyStressResponse []struct {
 }
 
 type WeightMeasurement struct {
+	CalendarDate      string  `json:"calendarDate"`
 	WeightInGrams     float64 `json:"weight"`
 	BodyFat           float64 `json:"bodyFat"`
 	MuscleMassInGrams int     `json:"muscleMass"`
