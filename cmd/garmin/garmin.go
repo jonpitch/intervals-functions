@@ -58,9 +58,12 @@ func garminToIntervals() (int, error) {
 	}
 
 	yesterday := time.Now().AddDate(0, 0, -1)
-	sleepResponse, err := garminClient.GetDailySleep(yesterday)
+	sleepResponse, err := garminClient.GetDailySleepSummariesByDate(yesterday, yesterday)
 	if err != nil {
 		return 500, fmt.Errorf("get daily sleep: %w", err)
+	}
+	if len(sleepResponse) == 0 {
+		return 500, errors.New("get daily sleep: no sleep data returned")
 	}
 
 	dailySummaryResponse, err := garminClient.GetDailySummary(yesterday, yesterday)
@@ -79,12 +82,12 @@ func garminToIntervals() (int, error) {
 	}
 
 	fmt.Println("-- sleep")
-	fmt.Printf("light: %d\n", sleepResponse.LightSleepSeconds)
-	fmt.Printf("deep: %d\n", sleepResponse.DeepSleepSeconds)
-	fmt.Printf("rem: %d\n", sleepResponse.RemSleepSeconds)
-	fmt.Printf("awake: %d\n", sleepResponse.AwakeSleepSeconds)
-	fmt.Printf("baseline: %d\n", sleepResponse.SleepNeed.BaselineMinutes)
-	fmt.Printf("actual: %d\n", sleepResponse.SleepNeed.ActualMinutes)
+	fmt.Printf("light: %d\n", sleepResponse[0].LightSleepSeconds)
+	fmt.Printf("deep: %d\n", sleepResponse[0].DeepSleepSeconds)
+	fmt.Printf("rem: %d\n", sleepResponse[0].RemSleepSeconds)
+	fmt.Printf("awake: %d\n", sleepResponse[0].AwakeSleepSeconds)
+	fmt.Printf("baseline: %d\n", sleepResponse[0].SleepNeed.BaselineMinutes)
+	fmt.Printf("actual: %d\n", sleepResponse[0].SleepNeed.ActualMinutes)
 	fmt.Println("-- body battery")
 	fmt.Printf("min bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MinValue)
 	fmt.Printf("max bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MaxValue)

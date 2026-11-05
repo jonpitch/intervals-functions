@@ -79,16 +79,17 @@ type WeightResponse struct {
 	DailyWeightSummaries []WeightSummary `json:"dailyWeightSummaries"`
 }
 
-// GetDailySleep retrieves the daily sleep data for a specific date from the Garmin API.
+// GetDailySleepSummariesByDate retrieves daily sleep data for a date range from the Garmin API.
 // documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
-func (c GarminClient) GetDailySleep(date time.Time) (DailySleepResponse, error) {
+func (c GarminClient) GetDailySleepSummariesByDate(startDate time.Time, endDate time.Time) ([]DailySleepResponse, error) {
 	query := url.Values{}
-	query.Set("date", date.Format("2006-01-02"))
-	requestURL := garminAPIURL + "/sleep-service/sleep/dailySleep" + "?" + query.Encode()
+	query.Set("startDate", startDate.Format("2006-01-02"))
+	query.Set("endDate", endDate.Format("2006-01-02"))
+	requestURL := garminAPIURL + "/sleep-service/sleep/dailySleepSummariesByDate?" + query.Encode()
 
-	dailySleep, err := getJSON[DailySleepResponse](requestURL, c.token, "daily sleep")
+	dailySleep, err := getJSON[[]DailySleepResponse](requestURL, c.token, "daily sleep")
 	if err != nil {
-		return DailySleepResponse{}, fmt.Errorf("get daily sleep: %w", err)
+		return nil, fmt.Errorf("get daily sleep: %w", err)
 	}
 
 	return dailySleep, nil
