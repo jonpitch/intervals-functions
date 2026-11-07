@@ -3,6 +3,8 @@ package garmin
 import (
 	"encoding/json"
 	"fmt"
+	"intervals-functions/utils/connect"
+	"intervals-functions/utils/format"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,50 +27,65 @@ func NewGarminClient(apiKey string) (GarminClient, error) {
 	return GarminClient{token: token}, nil
 }
 
+type SleepNeed struct {
+	BaselineMinutes int `json:"baseline"`
+	ActualMinutes   int `json:"actual"`
+}
+
 type DailySleepResponse struct {
-	CalendarDate       string  `json:"calendarDate"`
-	SleepTimeSeconds   int     `json:"sleepTimeSeconds"`
-	AverageRespiration float64 `json:"averageRespirationValue"`
-	DeepSleepSeconds   int     `json:"deepSleepSeconds"`
-	LightSleepSeconds  int     `json:"lightSleepSeconds"`
-	RemSleepSeconds    int     `json:"remSleepSeconds"`
-	AwakeSleepSeconds  int     `json:"awakeSleepSeconds"`
-	SleepNeed          struct {
-		BaselineMinutes int `json:"baseline"`
-		ActualMinutes   int `json:"actual"`
-	} `json:"sleepNeed"`
+	CalendarDate       format.GarminDate          `json:"calendarDate"`
+	SleepTimeSeconds   int                        `json:"sleepTimeSeconds"`
+	AverageRespiration float64                    `json:"averageRespirationValue"`
+	DeepSleepSeconds   int                        `json:"deepSleepSeconds"`
+	LightSleepSeconds  int                        `json:"lightSleepSeconds"`
+	RemSleepSeconds    int                        `json:"remSleepSeconds"`
+	AwakeSleepSeconds  int                        `json:"awakeSleepSeconds"`
+	SleepNeed          SleepNeed                  `json:"sleepNeed"`
+	AverageSpo2        float64                    `json:"averageSpO2Value"`
+	AverageHeartRate   int                        `json:"avgHeartRate"`
+	SleepQuality       connect.GarminSleepQuality `json:"sleepQualityTypePK"`
+}
+
+type DailySummaryData struct {
+	CalendarDate format.GarminDate `json:"calendarDate"`
+	BodyBattery  BodyBattery       `json:"bodybattery"`
+}
+
+type BodyBattery struct {
+	MinValue int `json:"minValue"`
+	MaxValue int `json:"maxValue"`
 }
 
 type DailySummaryResponse struct {
-	Data []struct {
-		CalendarDate string `json:"calendarDate"`
-		BodyBattery  struct {
-			MinValue int `json:"minValue"`
-			MaxValue int `json:"maxValue"`
-		} `json:"bodybattery"`
-	} `json:"data"`
+	Data []DailySummaryData `json:"data"`
 }
 
-type DailyStressResponse []struct {
-	CalendarDate string `json:"calendarDate"`
-	Values       struct {
-		OverallStressLevel          int `json:"overallStressLevel"`
-		HighStressDurationSeconds   int `json:"highStressDuration"`
-		LowStressDurationSeconds    int `json:"lowStressDuration"`
-		RestStressDurationSeconds   int `json:"restStressDuration"`
-		MediumStressDurationSeconds int `json:"mediumStressDuration"`
-	} `json:"values"`
+type StressValues struct {
+	OverallStressLevel          int `json:"overallStressLevel"`
+	HighStressDurationSeconds   int `json:"highStressDuration"`
+	LowStressDurationSeconds    int `json:"lowStressDuration"`
+	RestStressDurationSeconds   int `json:"restStressDuration"`
+	MediumStressDurationSeconds int `json:"mediumStressDuration"`
+}
+
+type DailyStressResponse struct {
+	CalendarDate format.GarminDate `json:"calendarDate"`
+	Values       StressValues      `json:"values"`
+}
+
+type LatestWeight struct {
+	CalendarDate      format.GarminDate `json:"calendarDate"`
+	WeightInGrams     float64           `json:"weight"`
+	BodyFat           float64           `json:"bodyFat"`
+	MuscleMassInGrams float64           `json:"muscleMass"`
+}
+
+type DailyWeightSummary struct {
+	LatestWeight LatestWeight `json:"latestWeight"`
 }
 
 type WeightResponse struct {
-	DailyWeightSummaries []struct {
-		LatestWeight struct {
-			CalendarDate      string  `json:"calendarDate"`
-			WeightInGrams     float64 `json:"weight"`
-			BodyFat           float64 `json:"bodyFat"`
-			MuscleMassInGrams int     `json:"muscleMass"`
-		} `json:"latestWeight"`
-	} `json:"dailyWeightSummaries"`
+	DailyWeightSummaries []DailyWeightSummary `json:"dailyWeightSummaries"`
 }
 
 // GetDailySleepSummariesByDate retrieves daily sleep data for a date range from the Garmin API.
@@ -89,7 +106,7 @@ func (c GarminClient) GetDailySleepSummariesByDate(startDate time.Time, endDate 
 
 // GetDailySummary retrieves daily summaries for a date range.
 // documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
-func (c GarminClient) GetDailySummary(startDate time.Time, endDate time.Time) (DailySummaryResponse, error) {
+func (c GarminClient) GetDailySummary(startDate time.Time, endDate time.Time) ([]DailySummaryData, error) {
 	query := url.Values{}
 	query.Set("startDate", startDate.Format("2006-01-02"))
 	query.Set("endDate", endDate.Format("2006-01-02"))
@@ -97,20 +114,20 @@ func (c GarminClient) GetDailySummary(startDate time.Time, endDate time.Time) (D
 
 	dailySummary, err := getJSON[DailySummaryResponse](requestURL, c.token, "daily summary")
 	if err != nil {
-		return DailySummaryResponse{}, fmt.Errorf("get daily summary: %w", err)
+		return []DailySummaryData{}, fmt.Errorf("get daily summary: %w", err)
 	}
 
-	return dailySummary, nil
+	return dailySummary.Data, nil
 }
 
 // GetDailyStress retrieves stress reports for a date range.
 // documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
-func (c GarminClient) GetDailyStress(startDate time.Time, endDate time.Time) (DailyStressResponse, error) {
+func (c GarminClient) GetDailyStress(startDate time.Time, endDate time.Time) ([]DailyStressResponse, error) {
 	requestURL := dateRangeURL("/usersummary-service/stats/stress/daily", startDate, endDate)
 
-	stress, err := getJSON[DailyStressResponse](requestURL, c.token, "daily stress")
+	stress, err := getJSON[[]DailyStressResponse](requestURL, c.token, "daily stress")
 	if err != nil {
-		return DailyStressResponse{}, fmt.Errorf("get daily stress: %w", err)
+		return []DailyStressResponse{}, fmt.Errorf("get daily stress: %w", err)
 	}
 
 	return stress, nil
@@ -118,15 +135,15 @@ func (c GarminClient) GetDailyStress(startDate time.Time, endDate time.Time) (Da
 
 // GetWeight retrieves weight data for a date range.
 // documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
-func (c GarminClient) GetWeight(startDate time.Time, endDate time.Time) (WeightResponse, error) {
+func (c GarminClient) GetWeight(startDate time.Time, endDate time.Time) ([]DailyWeightSummary, error) {
 	requestURL := dateRangeURL("/weight-service/weight/range", startDate, endDate)
 
 	weight, err := getJSON[WeightResponse](requestURL, c.token, "weight")
 	if err != nil {
-		return WeightResponse{}, fmt.Errorf("get weight: %w", err)
+		return []DailyWeightSummary{}, fmt.Errorf("get weight: %w", err)
 	}
 
-	return weight, nil
+	return weight.DailyWeightSummaries, nil
 }
 
 // dateRangeURL constructs a URL for Garmin API endpoints that require a start and end date.

@@ -2,185 +2,29 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"intervals-functions/api/garmin"
 	"intervals-functions/api/intervals"
+	"intervals-functions/utils/connect"
+	"intervals-functions/utils/format"
 	"intervals-functions/utils/ptr"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 )
 
-type WeightResponse struct {
-	DailyWeightSummaries []WeightSummary `json:"dailyWeightSummaries"`
-}
-
-// people can measure themselves multiple times throughout the day.
-// intervals.icu doesn't support multiple weights, and keeps the most recent measurement.
-// we'll use latestWeight for consistency rather than choosing min/max or some other measurement.
-type WeightSummary struct {
-	SummaryDate  GarminDate   `json:"summaryDate"`
-	LatestWeight LatestWeight `json:"latestWeight"`
-}
-
-type LatestWeight struct {
-	Weight     float64 `json:"weight"`
-	MuscleMass float64 `json:"muscleMass"`
-}
-
-type SleepResponse struct {
-	IndividualStats []SleepEntry `json:"individualStats"`
-}
-
-type SleepEntry struct {
-	Date   GarminDate `json:"calendarDate"`
-	Values SleepValue `json:"values"`
-}
-
-type GarminSleepQuality string
-
-const (
-	Excellent GarminSleepQuality = "EXCELLENT"
-	Good      GarminSleepQuality = "GOOD"
-	Fair      GarminSleepQuality = "FAIR"
-	Poor      GarminSleepQuality = "POOR"
-)
-
-type SleepValue struct {
-	RemTimeSeconds        int                `json:"remTime"`
-	RestingHeartRate      int                `json:"restingHeartRate"`
-	TotalSleepTimeSeconds int                `json:"totalSleepTimeInSeconds"`
-	DeepTimeSeconds       int                `json:"deepTime"`
-	AwakeTimeSeconds      int                `json:"awakeTime"`
-	SleepQuality          GarminSleepQuality `json:"sleepScoreQuality"`
-	Spo2                  float64            `json:"spO2"`
-	LightTimeSeconds      int                `json:"lightTime"`
-	AverageOvernightHrv   float64            `json:"avgOvernightHrv"`
-	SleepNeedMinutes      int                `json:"sleepNeed"`
-	SleepScore            float64            `json:"sleepScore"`
-}
-
-type RespirationEntry struct {
-	Date                    GarminDate `json:"calendarDate"`
-	AverageSleepRespiration float64    `json:"avgSleepRespiration"`
-}
-
-type StressEntry struct {
-	Date  GarminDate  `json:"calendarDate"`
-	Value StressValue `json:"values"`
-}
-
-type StressValue struct {
-	HighStressDurationSeconds   int `json:"highStressDuration"`
-	LowStressDurationSeconds    int `json:"lowStressDuration"`
-	OverallStressLevel          int `json:"overallStressLevel"`
-	RestStressDurationSeconds   int `json:"restStressDuration"`
-	MediumStressDurationSeconds int `json:"mediumStressDuration"`
-}
-
-type BodyBatteryEntry struct {
-	Date  GarminDate       `json:"calendarDate"`
-	Value BodyBatteryValue `json:"values"`
-}
-
-type BodyBatteryValue struct {
-	LowBodyBattery  int `json:"lowBodyBattery"`
-	HighBodyBattery int `json:"highBodyBattery"`
-}
-
-type Vo2Entry struct {
-	Generic Vo2Value `json:"generic"`
-	Cycling Vo2Value `json:"cycling"`
-}
-
-type Vo2Value struct {
-	Date         GarminDate `json:"calendarDate"`
-	PreciseValue float64    `json:"vo2MaxPreciseValue"`
-}
-
-const GarminAPI = "https://connect.garmin.com/gc-api"
-
-type GarminAPIEndpoint string
-
-const (
-	BodyBatteryURL GarminAPIEndpoint = "/usersummary-service/stats/bodybattery/daily"
-	RespirationURL GarminAPIEndpoint = "/usersummary-service/stats/respiration/daily"
-	StressURL      GarminAPIEndpoint = "/usersummary-service/stats/stress/daily"
-	SleepURL       GarminAPIEndpoint = "/sleep-service/stats/sleep/daily"
-	WeightURL      GarminAPIEndpoint = "/weight-service/weight/range"
-	Vo2MaxURL      GarminAPIEndpoint = "/metrics-service/metrics/maxmet/weekly"
-)
-
-type GarminDate struct {
-	time.Time
-}
-
-const garminDateLayout = "2006-01-02"
-
-func (d *GarminDate) UnmarshalJSON(b []byte) error {
-	s := string(b)
-	s = s[1 : len(s)-1]
-	if s == "" {
-		d.Time = time.Time{}
-		return nil
-	}
-	parsed, err := time.Parse(garminDateLayout, s)
-	if err != nil {
-		return err
-	}
-	d.Time = parsed
-	return nil
-}
-
-func (d GarminDate) MarshalJSON() ([]byte, error) {
-	if d.IsZero() {
-		return []byte("null"), nil
-	}
-	return []byte(`"` + d.Format(garminDateLayout) + `"`), nil
-}
-
-type GarminOverallAndIndividualResponseData interface {
-	SleepResponse | WeightResponse
-}
-
-type GarminArrayResponseData interface {
-	BodyBatteryEntry | RespirationEntry | StressEntry | Vo2Entry
-}
-
-type GarminRequest struct {
-	Headers     map[string]string
-	FromDateStr string
-	ToDateStr   string
-}
-
-// NewGarminRequest copies parsed cURL headers and applies defaults needed for Garmin API requests.
-func NewGarminRequest(headers map[string]string, fromDateStr string, toDateString string) GarminRequest {
-	h := make(map[string]string, len(headers)+1)
-	for k, v := range headers {
-		h[k] = v
-	}
-	return GarminRequest{
-		Headers:     h,
-		FromDateStr: fromDateStr,
-		ToDateStr:   toDateString,
-	}
-}
-
 /*
 backfill data from garmin connect to intervals.icu.
 
 signature:
-go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -metric -dry-run bodybattery,stress,respiration,sleep,weight,vo2max
+go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run daily,stress,sleep,weight
 */
 func main() {
-	const curlPath = "./request/curl.txt"
-	curlContents, err := os.ReadFile(curlPath)
-	if err != nil {
-		log.Fatal(err)
+	garminApiKey := os.Getenv("GARMIN_API_KEY")
+	if garminApiKey == "" {
+		log.Fatal("GARMIN_API_KEY is not set")
 	}
 
 	fromDateStr := flag.String("from", "", "start date of backfill (YYYY-MM-DD format)")
@@ -203,123 +47,94 @@ func main() {
 		log.Fatal("from date and to date are required, and in the format of YYYY-MM-DD")
 	}
 
-	_, err = validDate(*fromDateStr)
+	from, err := validDate(*fromDateStr)
 	if err != nil {
 		log.Fatal("from date is invalid, use YYYY-MM-DD format")
 	}
 
-	_, err = validDate(*toDateStr)
+	to, err := validDate(*toDateStr)
 	if err != nil {
 		log.Fatal("to date is invalid, use YYYY-MM-DD format")
 	}
 
-	fetchBodyBattery := false
+	garminClient, err := garmin.NewGarminClient(garminApiKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dateRange := NewGarminDateRange(from, to)
+
+	fetchDailySummary := false
 	fetchStress := false
-	fetchRespiration := false
 	fetchSleep := false
 	fetchWeight := false
-	fetchVo2 := false
 
 	garminArgs := args[0]
 	garminOptions := strings.Split(garminArgs, ",")
 	for _, o := range garminOptions {
 		switch o {
-		case "bodybattery":
-			fetchBodyBattery = true
+		case "daily":
+			fetchDailySummary = true
 		case "stress":
 			fetchStress = true
-		case "respiration":
-			fetchRespiration = true
 		case "sleep":
 			fetchSleep = true
 		case "weight":
 			fetchWeight = true
-		case "vo2max":
-			fetchVo2 = true
 		default:
 			log.Fatalf("unknown garmin option")
 		}
 	}
 
-	headers, err := getGarminHeaders(curlContents)
-	if err != nil {
-		log.Fatal(err)
-	}
+	records := map[format.GarminDate]intervals.WellnessRecord{}
 
-	records := map[GarminDate]intervals.WellnessRecord{}
-
-	// accumulate all wellness data before updating in intervals
-	garminRequest := NewGarminRequest(headers, *fromDateStr, *toDateStr)
-
-	if fetchBodyBattery {
-		records, err = getGarminArrayData(
-			garminRequest,
-			BodyBatteryURL,
+	if fetchDailySummary {
+		records, err = GarminApiDateRangeRequest(
+			dateRange,
+			garminClient.GetDailySummary,
 			records,
-			garminBodyBatteryAccumulator,
+			garminDailySummaryAccumulator,
 		)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
 
-	if fetchRespiration {
-		records, err = getGarminArrayData(
-			garminRequest,
-			RespirationURL,
-			records,
-			garminRespirationAccumulator,
-		)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	if fetchStress {
-		records, err = getGarminArrayData(
-			garminRequest,
-			StressURL,
+		records, err = GarminApiDateRangeRequest(
+			dateRange,
+			garminClient.GetDailyStress,
 			records,
 			garminStressAccumulator,
 		)
+
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	if fetchSleep {
-		records, err = getGarminOveralAndIndividualData(
-			garminRequest,
-			SleepURL,
+		records, err = GarminApiDateRangeRequest(
+			dateRange,
+			garminClient.GetDailySleepSummariesByDate,
 			records,
-			func(resp SleepResponse) []SleepEntry { return resp.IndividualStats },
-			garminSleepAccumulator,
+			garminDailySleepAccumulator,
 		)
+
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	if fetchWeight {
-		records, err = getGarminOveralAndIndividualData(
-			garminRequest,
-			WeightURL,
+		records, err = GarminApiDateRangeRequest(
+			dateRange,
+			garminClient.GetWeight,
 			records,
-			func(resp WeightResponse) []WeightSummary { return resp.DailyWeightSummaries },
 			garminWeightAccumulator,
 		)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
 
-	if fetchVo2 {
-		records, err = getGarminArrayData(
-			garminRequest,
-			Vo2MaxURL,
-			records,
-			garminVo2Accumulator,
-		)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -349,94 +164,104 @@ func main() {
 	log.Println("done")
 }
 
-// getGarminArrayData make requests to the Garmin API specified for the date ranges specified.
-// this is meant to handle garmin API endpoints that return an array of records
-func getGarminArrayData[T GarminArrayResponseData](
-	r GarminRequest,
-	endpoint GarminAPIEndpoint,
-	wellness map[GarminDate]intervals.WellnessRecord,
-	accumulate func([]T, map[GarminDate]intervals.WellnessRecord) map[GarminDate]intervals.WellnessRecord,
-) (map[GarminDate]intervals.WellnessRecord, error) {
-	urls, err := buildGarminURLs(endpoint, r.FromDateStr, r.ToDateStr)
-	if err != nil {
-		return wellness, err
-	}
-
-	var data []T
-	for _, url := range urls {
-		log.Printf("[%s] fetching %s...\n", garminApiToLabel(endpoint), url)
-		bodyText, err := garminFetchGET(url, r)
-		if err != nil {
-			return wellness, err
-		}
-
-		var records []T
-		err = json.Unmarshal(bodyText, &records)
-		if err != nil {
-			return wellness, err
-		}
-
-		data = append(data, records...)
-	}
-
-	return accumulate(data, wellness), nil
+type GarminApiArrayResponseData interface {
+	garmin.DailySleepResponse | garmin.DailyWeightSummary | garmin.DailyStressResponse | garmin.DailySummaryData
 }
 
-// getGarminOveralAndIndividualData make requests to the Garmin API specified for the date ranges specified.
-// this is meant to handle garmin API endpoints that return an object with "overallStats" and "individualStats" data.
-// this accumulator only handles individual stats
-func getGarminOveralAndIndividualData[T GarminOverallAndIndividualResponseData, E any](
-	r GarminRequest,
-	endpoint GarminAPIEndpoint,
-	wellness map[GarminDate]intervals.WellnessRecord,
-	extract func(T) []E,
-	accumulate func([]E, map[GarminDate]intervals.WellnessRecord) map[GarminDate]intervals.WellnessRecord,
-) (map[GarminDate]intervals.WellnessRecord, error) {
-	urls, err := buildGarminURLs(endpoint, r.FromDateStr, r.ToDateStr)
+type GarminDateRange struct {
+	From time.Time
+	To   time.Time
+}
+
+// NewGarminDateRange API requests that take a date range
+func NewGarminDateRange(from time.Time, to time.Time) GarminDateRange {
+	return GarminDateRange{
+		From: from,
+		To:   to,
+	}
+}
+
+// GarminApiDateRangeRequest make a garmin API request for a given date range and accumulate wellness data
+func GarminApiDateRangeRequest[T GarminApiArrayResponseData](
+	request GarminDateRange,
+	apiRequest func(startDate time.Time, endDate time.Time) ([]T, error),
+	wellness map[format.GarminDate]intervals.WellnessRecord,
+	accumulate func([]T, map[format.GarminDate]intervals.WellnessRecord) map[format.GarminDate]intervals.WellnessRecord,
+) (map[format.GarminDate]intervals.WellnessRecord, error) {
+	response, err := apiRequest(request.From, request.To)
 	if err != nil {
 		return wellness, err
 	}
 
-	var data []E
-	for _, url := range urls {
-		log.Printf("[%s] fetching %s...\n", garminApiToLabel(endpoint), url)
-		bodyText, err := garminFetchGET(url, r)
-		if err != nil {
-			return wellness, err
-		}
+	return accumulate(response, wellness), nil
+}
 
-		var payload T
-		err = json.Unmarshal(bodyText, &payload)
-		if err != nil {
-			return wellness, err
-		}
+// garminRespirationAccumulator converts DailySleepResponse records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminDailySleepAccumulator(
+	sleepResponses []garmin.DailySleepResponse,
+	records map[format.GarminDate]intervals.WellnessRecord,
+) map[format.GarminDate]intervals.WellnessRecord {
+	for _, b := range sleepResponses {
+		if record, exists := records[b.CalendarDate]; exists {
+			record.Respiration = ptr.Float(b.AverageRespiration)
+			// TODO
+			// record.SleepScore = ptr.Float(s.Values.SleepScore)
+			// record.HrvRmssd = ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
+			record.SleepSeconds = ptr.Int(b.SleepTimeSeconds)
+			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(b.SleepQuality)
+			record.RestingHr = ptr.Int(b.AverageHeartRate)
+			record.OxygenSaturation = ptr.CoalesceFloat(b.AverageSpo2)
+			record.SleepNeedMinutes = ptr.Int(b.SleepNeed.ActualMinutes)
+			record.SleepRemTimeSeconds = ptr.Int(b.RemSleepSeconds)
+			record.SleepDeepTimeSeconds = ptr.Int(b.DeepSleepSeconds)
+			record.SleepLightTimeSeconds = ptr.Int(b.LightSleepSeconds)
+			record.SleepAwakeTimeSeconds = ptr.Int(b.AwakeSleepSeconds)
 
-		data = append(data, extract(payload)...)
+			records[b.CalendarDate] = record
+		} else {
+			records[b.CalendarDate] = intervals.WellnessRecord{
+				ID:          intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
+				Respiration: ptr.CoalesceFloat(b.AverageRespiration),
+				// TODO
+				// SleepScore:            ptr.Float(s.Values.SleepScore),
+				// HrvRmssd:              ptr.CoalesceFloat(s.Values.AverageOvernightHrv),
+				SleepSeconds:          ptr.Int(b.SleepTimeSeconds),
+				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(b.SleepQuality),
+				RestingHr:             ptr.CoalesceInt(b.AverageHeartRate),
+				OxygenSaturation:      ptr.CoalesceFloat(b.AverageSpo2),
+				SleepNeedMinutes:      ptr.Int(b.SleepNeed.ActualMinutes),
+				SleepRemTimeSeconds:   ptr.Int(b.RemSleepSeconds),
+				SleepDeepTimeSeconds:  ptr.Int(b.DeepSleepSeconds),
+				SleepLightTimeSeconds: ptr.Int(b.LightSleepSeconds),
+				SleepAwakeTimeSeconds: ptr.Int(b.AwakeSleepSeconds),
+			}
+		}
 	}
 
-	return accumulate(data, wellness), nil
+	return records
 }
 
 // garminWeightAccumulator converts WeightSummary records to intervals.WellnessRecord and accumulates
 // them on the provided map
 func garminWeightAccumulator(
-	weight []WeightSummary,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
+	weight []garmin.DailyWeightSummary,
+	records map[format.GarminDate]intervals.WellnessRecord,
+) map[format.GarminDate]intervals.WellnessRecord {
 	for _, w := range weight {
-		weightInGrams := w.LatestWeight.Weight
+		weightInGrams := w.LatestWeight.WeightInGrams
 		weight := weightInGrams / 1000
-		muscleMassInGrams := w.LatestWeight.MuscleMass
+		muscleMassInGrams := w.LatestWeight.MuscleMassInGrams
 		muscleMass := muscleMassInGrams / 1000
-		if record, exists := records[w.SummaryDate]; exists {
+		if record, exists := records[w.LatestWeight.CalendarDate]; exists {
 			record.Weight = ptr.Float(weight)
 			if muscleMass != 0 {
 				record.MuscleMass = ptr.Float(muscleMass)
 			}
-			records[w.SummaryDate] = record
+			records[w.LatestWeight.CalendarDate] = record
 		} else {
-			records[w.SummaryDate] = intervals.WellnessRecord{
-				ID:         intervals.WellnessRecordID(w.SummaryDate.Format("2006-01-02")),
+			records[w.LatestWeight.CalendarDate] = intervals.WellnessRecord{
+				ID:         intervals.WellnessRecordID(w.LatestWeight.CalendarDate.Format("2006-01-02")),
 				Weight:     ptr.CoalesceFloat(weight),
 				MuscleMass: ptr.CoalesceFloat(muscleMass),
 			}
@@ -449,26 +274,26 @@ func garminWeightAccumulator(
 // garminStressAccumulator converts StressEntry records to intervals.WellnessRecord and accumulates
 // them on the provided map
 func garminStressAccumulator(
-	stress []StressEntry,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
+	stress []garmin.DailyStressResponse,
+	records map[format.GarminDate]intervals.WellnessRecord,
+) map[format.GarminDate]intervals.WellnessRecord {
 	for _, b := range stress {
-		if record, exists := records[b.Date]; exists {
-			record.LowStressSeconds = ptr.Int(b.Value.LowStressDurationSeconds)
-			record.MediumStressSeconds = ptr.Int(b.Value.MediumStressDurationSeconds)
-			record.HighStressSeconds = ptr.Int(b.Value.HighStressDurationSeconds)
-			record.RestStressSeconds = ptr.Int(b.Value.RestStressDurationSeconds)
-			overall := garminStressToIntervalsStress(b.Value.OverallStressLevel)
+		if record, exists := records[b.CalendarDate]; exists {
+			record.LowStressSeconds = ptr.Int(b.Values.LowStressDurationSeconds)
+			record.MediumStressSeconds = ptr.Int(b.Values.MediumStressDurationSeconds)
+			record.HighStressSeconds = ptr.Int(b.Values.HighStressDurationSeconds)
+			record.RestStressSeconds = ptr.Int(b.Values.RestStressDurationSeconds)
+			overall := garminStressToIntervalsStress(b.Values.OverallStressLevel)
 			record.Stress = &overall
-			records[b.Date] = record
+			records[b.CalendarDate] = record
 		} else {
-			overall := garminStressToIntervalsStress(b.Value.OverallStressLevel)
-			records[b.Date] = intervals.WellnessRecord{
-				ID:                  intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-				LowStressSeconds:    ptr.Int(b.Value.LowStressDurationSeconds),
-				MediumStressSeconds: ptr.Int(b.Value.MediumStressDurationSeconds),
-				HighStressSeconds:   ptr.Int(b.Value.HighStressDurationSeconds),
-				RestStressSeconds:   ptr.Int(b.Value.RestStressDurationSeconds),
+			overall := garminStressToIntervalsStress(b.Values.OverallStressLevel)
+			records[b.CalendarDate] = intervals.WellnessRecord{
+				ID:                  intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
+				LowStressSeconds:    ptr.Int(b.Values.LowStressDurationSeconds),
+				MediumStressSeconds: ptr.Int(b.Values.MediumStressDurationSeconds),
+				HighStressSeconds:   ptr.Int(b.Values.HighStressDurationSeconds),
+				RestStressSeconds:   ptr.Int(b.Values.RestStressDurationSeconds),
 				Stress:              &overall,
 			}
 		}
@@ -477,233 +302,27 @@ func garminStressAccumulator(
 	return records
 }
 
-// garminRespirationAccumulator converts RespirationEntry records to intervals.WellnessRecord and accumulates
+// garminDailySummaryAccumulator converts DailySummaryData records to intervals.WellnessRecord and accumulates
 // them on the provided map
-func garminRespirationAccumulator(
-	respiration []RespirationEntry,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
-	for _, b := range respiration {
-		if record, exists := records[b.Date]; exists {
-			record.Respiration = ptr.Float(b.AverageSleepRespiration)
-			records[b.Date] = record
-		} else {
-			records[b.Date] = intervals.WellnessRecord{
-				ID:          intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-				Respiration: ptr.CoalesceFloat(b.AverageSleepRespiration),
-			}
-		}
-	}
-
-	return records
-}
-
-// garminSleepAccumulator converts SleepEntry records to intervals.WellnessRecord and accumulates
-// them on the provided map
-func garminSleepAccumulator(
-	sleep []SleepEntry,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
-	for _, s := range sleep {
-		if record, exists := records[s.Date]; exists {
-			record.SleepScore = ptr.Float(s.Values.SleepScore)
-			record.SleepSeconds = ptr.Int(s.Values.TotalSleepTimeSeconds)
-			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality)
-			record.HrvRmssd = ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
-			record.RestingHr = ptr.Int(s.Values.RestingHeartRate)
-			record.OxygenSaturation = ptr.CoalesceFloat(s.Values.Spo2)
-			record.SleepNeedMinutes = ptr.Int(s.Values.SleepNeedMinutes)
-			record.SleepRemTimeSeconds = ptr.Int(s.Values.RemTimeSeconds)
-			record.SleepDeepTimeSeconds = ptr.Int(s.Values.DeepTimeSeconds)
-			record.SleepLightTimeSeconds = ptr.Int(s.Values.LightTimeSeconds)
-			record.SleepAwakeTimeSeconds = ptr.Int(s.Values.AwakeTimeSeconds)
-			records[s.Date] = record
-		} else {
-			records[s.Date] = intervals.WellnessRecord{
-				ID:                    intervals.WellnessRecordID(s.Date.Format("2006-01-02")),
-				SleepScore:            ptr.Float(s.Values.SleepScore),
-				SleepSeconds:          ptr.Int(s.Values.TotalSleepTimeSeconds),
-				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(s.Values.SleepQuality),
-				HrvRmssd:              ptr.CoalesceFloat(s.Values.AverageOvernightHrv),
-				RestingHr:             ptr.CoalesceInt(s.Values.RestingHeartRate),
-				OxygenSaturation:      ptr.CoalesceFloat(s.Values.Spo2),
-				SleepNeedMinutes:      ptr.Int(s.Values.SleepNeedMinutes),
-				SleepRemTimeSeconds:   ptr.Int(s.Values.RemTimeSeconds),
-				SleepDeepTimeSeconds:  ptr.Int(s.Values.DeepTimeSeconds),
-				SleepLightTimeSeconds: ptr.Int(s.Values.LightTimeSeconds),
-				SleepAwakeTimeSeconds: ptr.Int(s.Values.AwakeTimeSeconds),
-			}
-		}
-	}
-
-	return records
-}
-
-// garminVo2Accumulator converts Vo2Entry records to intervals.WellnessRecord and accumulates
-// them on the provided map. The generic and cycling VO2 max values each carry their own
-// calendarDate, which can differ, so each is upserted against its own date; a zero date
-// (e.g. Garmin returns a null "cycling" object for entries with no cycling VO2 max) is skipped.
-func garminVo2Accumulator(
-	entries []Vo2Entry,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
-	for _, e := range entries {
-		if !e.Generic.Date.IsZero() {
-			if record, exists := records[e.Generic.Date]; exists {
-				record.Vo2Max = ptr.Float(e.Generic.PreciseValue)
-				records[e.Generic.Date] = record
-			} else {
-				records[e.Generic.Date] = intervals.WellnessRecord{
-					ID:     intervals.WellnessRecordID(e.Generic.Date.Format("2006-01-02")),
-					Vo2Max: ptr.CoalesceFloat(e.Generic.PreciseValue),
-				}
-			}
-		}
-
-		if !e.Cycling.Date.IsZero() {
-			if record, exists := records[e.Cycling.Date]; exists {
-				record.CyclingVo2Max = ptr.Float(e.Cycling.PreciseValue)
-				records[e.Cycling.Date] = record
-			} else {
-				records[e.Cycling.Date] = intervals.WellnessRecord{
-					ID:            intervals.WellnessRecordID(e.Cycling.Date.Format("2006-01-02")),
-					CyclingVo2Max: ptr.CoalesceFloat(e.Cycling.PreciseValue),
-				}
-			}
-		}
-	}
-
-	return records
-}
-
-// garminBodyBatteryAccumulator converts BodyBatteryEntry records to intervals.WellnessRecord and accumulates
-// them on the provided map
-func garminBodyBatteryAccumulator(
-	battery []BodyBatteryEntry,
-	records map[GarminDate]intervals.WellnessRecord,
-) map[GarminDate]intervals.WellnessRecord {
+func garminDailySummaryAccumulator(
+	battery []garmin.DailySummaryData,
+	records map[format.GarminDate]intervals.WellnessRecord,
+) map[format.GarminDate]intervals.WellnessRecord {
 	for _, b := range battery {
-		if record, exists := records[b.Date]; exists {
-			record.BodyBatteryMin = ptr.Int(b.Value.LowBodyBattery)
-			record.BodyBatterMax = ptr.Int(b.Value.HighBodyBattery)
-			records[b.Date] = record
+		if record, exists := records[b.CalendarDate]; exists {
+			record.BodyBatteryMin = ptr.Int(b.BodyBattery.MinValue)
+			record.BodyBatterMax = ptr.Int(b.BodyBattery.MaxValue)
+			records[b.CalendarDate] = record
 		} else {
-			records[b.Date] = intervals.WellnessRecord{
-				ID:             intervals.WellnessRecordID(b.Date.Format("2006-01-02")),
-				BodyBatteryMin: ptr.Int(b.Value.LowBodyBattery),
-				BodyBatterMax:  ptr.Int(b.Value.HighBodyBattery),
+			records[b.CalendarDate] = intervals.WellnessRecord{
+				ID:             intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
+				BodyBatteryMin: ptr.Int(b.BodyBattery.MinValue),
+				BodyBatterMax:  ptr.Int(b.BodyBattery.MaxValue),
 			}
 		}
 	}
 
 	return records
-}
-
-// garminFetchGET performs a GET with the headers from r (including defaults from NewGarminRequest).
-func garminFetchGET(url string, r GarminRequest) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range r.Headers {
-		req.Header.Set(k, v)
-	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
-}
-
-// getGarminHeaders parses -H 'name: value' lines and -b cookie from a garmin connect cURL request.
-// Header names are canonicalized; the cookie from -b is stored under the Cookie key.
-func getGarminHeaders(fileContents []byte) (map[string]string, error) {
-	headers := make(map[string]string)
-	lines := strings.SplitSeq(string(fileContents), "\n")
-	for line := range lines {
-		line = strings.TrimSpace(line)
-
-		if strings.HasPrefix(line, "-H ") {
-			rest := strings.TrimPrefix(line, "-H ")
-			rest = strings.Trim(rest, `'" \`)
-			parts := strings.SplitN(rest, ":", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			name := http.CanonicalHeaderKey(strings.TrimSpace(parts[0]))
-			value := strings.TrimSpace(parts[1])
-			headers[name] = value
-		}
-
-		if after, ok := strings.CutPrefix(line, "-b "); ok {
-			cookie := strings.Trim(after, `'" \`)
-			headers[http.CanonicalHeaderKey("cookie")] = cookie
-		}
-	}
-
-	csrf := headers[http.CanonicalHeaderKey("connect-csrf-token")]
-	cookie := headers[http.CanonicalHeaderKey("cookie")]
-	if csrf == "" || cookie == "" {
-		return nil, errors.New("failed to find csrf token or cookie")
-	}
-
-	return headers, nil
-}
-
-// buildGarminURLs will build the Garmin API URL for a specific date range
-// note: the Garmin API only allows for windows of 28 days
-func buildGarminURLs(endpoint GarminAPIEndpoint, startStr string, endStr string) ([]string, error) {
-	const layout = "2006-01-02"
-	start, err := time.Parse(layout, startStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid start date %q: %w", startStr, err)
-	}
-
-	end, err := time.Parse(layout, endStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid end date %q: %w", endStr, err)
-	}
-
-	today := time.Now().Truncate(24 * time.Hour)
-	if start.After(today) {
-		return nil, fmt.Errorf("start date %s cannot be after today (%s)", startStr, today.Format(layout))
-	}
-
-	if end.After(today) {
-		return nil, fmt.Errorf("end date %s cannot be after today (%s)", endStr, today.Format(layout))
-	}
-
-	if start.Equal(end) {
-		return nil, fmt.Errorf("start date %s is the same as end date %s", startStr, endStr)
-	}
-
-	// garmin only accepts date ranges of 28 days
-	var urls []string
-	for curStart := start; !curStart.After(end); {
-		curEnd := curStart.AddDate(0, 0, 27)
-		if curEnd.After(end) {
-			curEnd = end
-		}
-
-		url := fmt.Sprintf(
-			"%s%s/%s/%s",
-			GarminAPI,
-			endpoint,
-			curStart.Format(layout),
-			curEnd.Format(layout),
-		)
-
-		if endpoint == WeightURL {
-			url += "?includeAll=true"
-		}
-
-		urls = append(urls, url)
-		curStart = curEnd.AddDate(0, 0, 1)
-	}
-
-	return urls, nil
 }
 
 // garminStressToIntervalsStress maps a numerical garmin overall stress score to an intervals stress value
@@ -720,43 +339,23 @@ func garminStressToIntervalsStress(stress int) intervals.StressLevel {
 }
 
 // garminSleepQualityToIntervalsSleepQuality maps a garmin sleep quality string to intervals sleep quality value
-func garminSleepQualityToIntervalsSleepQuality(q GarminSleepQuality) *intervals.SleepQuality {
+func garminSleepQualityToIntervalsSleepQuality(q connect.GarminSleepQuality) *intervals.SleepQuality {
 	var quality *intervals.SleepQuality
 	switch q {
-	case Excellent:
+	case connect.Excellent:
 		quality := intervals.GreatSleepQuality
 		return &quality
-	case Good:
+	case connect.Good:
 		quality := intervals.GoodSleepQuality
 		return &quality
-	case Fair:
+	case connect.Fair:
 		quality := intervals.AverageSleepQuality
 		return &quality
-	case Poor:
+	case connect.Poor:
 		quality := intervals.PoorSleepQuality
 		return &quality
 	default:
 		return quality
-	}
-}
-
-// garminApiToLabel is a helper to print out a user-friendly name of a given garmin API endpoint
-func garminApiToLabel(api GarminAPIEndpoint) string {
-	switch api {
-	case BodyBatteryURL:
-		return "body battery"
-	case RespirationURL:
-		return "respiration"
-	case StressURL:
-		return "stress"
-	case SleepURL:
-		return "sleep"
-	case WeightURL:
-		return "weight"
-	case Vo2MaxURL:
-		return "vo2max"
-	default:
-		return ""
 	}
 }
 

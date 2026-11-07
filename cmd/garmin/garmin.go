@@ -90,9 +90,9 @@ func garminToIntervals() (int, error) {
 	fmt.Printf("baseline: %d\n", sleepResponse[0].SleepNeed.BaselineMinutes)
 	fmt.Printf("actual: %d\n", sleepResponse[0].SleepNeed.ActualMinutes)
 	fmt.Println("-- body battery")
-	fmt.Printf("date: %s\n", dailySummaryResponse.Data[0].CalendarDate)
-	fmt.Printf("min bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MinValue)
-	fmt.Printf("max bat: %d\n", dailySummaryResponse.Data[0].BodyBattery.MaxValue)
+	fmt.Printf("date: %s\n", dailySummaryResponse[0].CalendarDate)
+	fmt.Printf("min bat: %d\n", dailySummaryResponse[0].BodyBattery.MinValue)
+	fmt.Printf("max bat: %d\n", dailySummaryResponse[0].BodyBattery.MaxValue)
 	fmt.Println("-- stress")
 	fmt.Printf("date: %s\n", stressResponse[0].CalendarDate)
 	fmt.Printf("overall: %d\n", stressResponse[0].Values.OverallStressLevel)
@@ -101,10 +101,10 @@ func garminToIntervals() (int, error) {
 	fmt.Printf("med: %d\n", stressResponse[0].Values.MediumStressDurationSeconds)
 	fmt.Printf("high: %d\n", stressResponse[0].Values.HighStressDurationSeconds)
 	fmt.Println("-- weight")
-	fmt.Printf("date: %s\n", weightResponse.DailyWeightSummaries[0].LatestWeight.CalendarDate)
-	fmt.Printf("weight: %f\n", weightResponse.DailyWeightSummaries[0].LatestWeight.WeightInGrams)
-	fmt.Printf("muscle: %d\n", weightResponse.DailyWeightSummaries[0].LatestWeight.MuscleMassInGrams)
-	fmt.Printf("fat: %f\n", weightResponse.DailyWeightSummaries[0].LatestWeight.BodyFat)
+	fmt.Printf("date: %s\n", weightResponse[0].LatestWeight.CalendarDate)
+	fmt.Printf("weight: %f\n", weightResponse[0].LatestWeight.WeightInGrams)
+	fmt.Printf("muscle: %d\n", weightResponse[0].LatestWeight.MuscleMassInGrams)
+	fmt.Printf("fat: %f\n", weightResponse[0].LatestWeight.BodyFat)
 
 	// TODO upate intervals wellness record
 
