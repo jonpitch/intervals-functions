@@ -121,11 +121,11 @@ func TestUpdateWellnessRecordBulk(t *testing.T) {
 		{
 			ID:             WellnessRecordID("666"),
 			BodyBatteryMin: ptr.Int(30),
-			BodyBatterMax:  ptr.Int(90),
+			BodyBatteryMax: ptr.Int(90),
 		}, {
 			ID:             WellnessRecordID("777"),
 			BodyBatteryMin: ptr.Int(40),
-			BodyBatterMax:  ptr.Int(100),
+			BodyBatteryMax: ptr.Int(100),
 		}}
 
 	athleteID := "i1234"

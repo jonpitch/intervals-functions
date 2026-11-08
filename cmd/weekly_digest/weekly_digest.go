@@ -328,8 +328,8 @@ func windowAverages(wellness []intervals.WellnessRecord) WindowAverage {
 			bodyBatteryMinSum += *w.BodyBatteryMin
 			bodyBatteryMinTotal++
 		}
-		if w.BodyBatterMax != nil {
-			bodyBatteryMaxSum += *w.BodyBatterMax
+		if w.BodyBatteryMax != nil {
+			bodyBatteryMaxSum += *w.BodyBatteryMax
 			bodyBatterMaxTotal++
 		}
 		if w.Respiration != nil {

@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"intervals-functions/api/garmin"
+	"intervals-functions/api/intervals"
+	"intervals-functions/utils/connect"
+	"intervals-functions/utils/ptr"
 	"log"
+	"math"
 	"os"
 	"time"
 
@@ -81,39 +85,47 @@ func garminToIntervals() (int, error) {
 		return 500, fmt.Errorf("get hrv: %w", err)
 	}
 
-	fmt.Println("-- sleep")
-	fmt.Printf("date: %s\n", sleepResponse[0].CalendarDate)
-	fmt.Printf("light: %d\n", sleepResponse[0].LightSleepSeconds)
-	fmt.Printf("deep: %d\n", sleepResponse[0].DeepSleepSeconds)
-	fmt.Printf("rem: %d\n", sleepResponse[0].RemSleepSeconds)
-	fmt.Printf("awake: %d\n", sleepResponse[0].AwakeSleepSeconds)
-	fmt.Printf("baseline: %d\n", sleepResponse[0].SleepNeed.BaselineMinutes)
-	fmt.Printf("actual: %d\n", sleepResponse[0].SleepNeed.ActualMinutes)
-	fmt.Printf("spo2: %f\n", sleepResponse[0].AverageSpo2)
-	fmt.Printf("hr: %f\n", sleepResponse[0].AverageHeartRate)
-	fmt.Printf("quality: %s\n", sleepResponse[0].SleepScores.Overall.Qaulifier)
-	fmt.Printf("score: %d\n", sleepResponse[0].SleepScores.Overall.Value)
-	fmt.Println("-- body battery")
-	fmt.Printf("date: %s\n", dailySummaryResponse[0].CalendarDate)
-	fmt.Printf("min bat: %d\n", dailySummaryResponse[0].BodyBattery.MinValue)
-	fmt.Printf("max bat: %d\n", dailySummaryResponse[0].BodyBattery.MaxValue)
-	fmt.Println("-- stress")
-	fmt.Printf("date: %s\n", dailySummaryResponse[0].CalendarDate)
-	fmt.Printf("overall: %d\n", dailySummaryResponse[0].Stress.TotalDurationInMillis)
-	fmt.Printf("rest: %d\n", dailySummaryResponse[0].Stress.RestDurationInMillis)
-	fmt.Printf("low: %d\n", dailySummaryResponse[0].Stress.LowStressDurationInMillis)
-	fmt.Printf("med: %d\n", dailySummaryResponse[0].Stress.MediumStressDurationInMillis)
-	fmt.Printf("high: %d\n", dailySummaryResponse[0].Stress.HighStressDurationInMillis)
-	fmt.Println("-- weight")
-	fmt.Printf("date: %s\n", weightResponse[0].LatestWeight.CalendarDate)
-	fmt.Printf("weight: %f\n", weightResponse[0].LatestWeight.WeightInGrams)
-	fmt.Printf("muscle: %f\n", weightResponse[0].LatestWeight.MuscleMassInGrams)
-	fmt.Printf("fat: %f\n", weightResponse[0].LatestWeight.BodyFat)
-	fmt.Println("-- hrv")
-	fmt.Printf("date: %s\n", hrvResponse[0].CalendarDate)
-	fmt.Printf("last night avg: %f\n", hrvResponse[0].LastNightAvg)
+	fmt.Printf("get intervals wellness record for %v\n", yesterday.Format("2006-01-02"))
+	intervalsClient := intervals.NewIntervalsClient(intervals.APIURL, intervalsApiKey, intervalsAthleteID)
+	wellness, err := intervalsClient.GetWellnessRecord(yesterday)
+	if err != nil {
+		return 500, err
+	}
 
-	// TODO upate intervals wellness record
+	fmt.Println("updating intervals wellness record...")
+	stressAvg := connect.GarminStressToIntervalsStress(dailySummaryResponse[0].Stress.AverageLevel)
+	err = intervalsClient.UpdateWellnessRecord(intervals.WellnessRecord{
+		ID: wellness.ID,
+		// body battery
+		BodyBatteryMin: ptr.Int(dailySummaryResponse[0].BodyBattery.MinValue),
+		BodyBatteryMax: ptr.Int(dailySummaryResponse[0].BodyBattery.MaxValue),
+		// sleep
+		SleepLightTimeSeconds: ptr.Int(sleepResponse[0].LightSleepSeconds),
+		SleepDeepTimeSeconds:  ptr.Int(sleepResponse[0].DeepSleepSeconds),
+		SleepRemTimeSeconds:   ptr.Int(sleepResponse[0].RemSleepSeconds),
+		SleepAwakeTimeSeconds: ptr.Int(sleepResponse[0].AwakeSleepSeconds),
+		SleepNeedMinutes:      ptr.Int(sleepResponse[0].SleepNeed.ActualMinutes),
+		SleepQuality:          connect.GarminSleepQualityToIntervalsSleepQuality(sleepResponse[0].SleepScores.Overall.Qaulifier),
+		SleepScore:            ptr.Float(float64(sleepResponse[0].SleepScores.Overall.Value)),
+		// stress
+		Stress:              &stressAvg,
+		RestStressSeconds:   ptr.Int(dailySummaryResponse[0].Stress.RestDurationInMillis / 1000),
+		LowStressSeconds:    ptr.Int(dailySummaryResponse[0].Stress.LowStressDurationInMillis / 1000),
+		MediumStressSeconds: ptr.Int(dailySummaryResponse[0].Stress.MediumStressDurationInMillis / 1000),
+		HighStressSeconds:   ptr.Int(dailySummaryResponse[0].Stress.HighStressDurationInMillis / 1000),
+		// weight
+		BodyFat:    ptr.Float(weightResponse[0].LatestWeight.BodyFat),
+		MuscleMass: ptr.Float(weightResponse[0].LatestWeight.MuscleMassInGrams / 1000),
+		Weight:     ptr.Float(weightResponse[0].LatestWeight.WeightInGrams / 1000),
+		// heart
+		RestingHr:        ptr.Int(int(math.Round(dailySummaryResponse[0].HeartRate.RestingValue))),
+		HrvRmssd:         ptr.Float(hrvResponse[0].LastNightAvg),
+		OxygenSaturation: ptr.Float(sleepResponse[0].AverageSpo2),
+	})
+
+	if err != nil {
+		return 500, err
+	}
 
 	return 200, nil
 }

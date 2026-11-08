@@ -54,7 +54,7 @@ type WellnessRecord struct {
 
 	// custom attributes
 	BodyBatteryMin        *int     `json:"BodyBatteryMin,omitempty"`
-	BodyBatterMax         *int     `json:"BodyBatteryMax,omitempty"`
+	BodyBatteryMax        *int     `json:"BodyBatteryMax,omitempty"`
 	RestStressSeconds     *int     `json:"StressRestSeconds,omitempty"`
 	LowStressSeconds      *int     `json:"StressLowSeconds,omitempty"`
 	MediumStressSeconds   *int     `json:"StressMediumSeconds,omitempty"`

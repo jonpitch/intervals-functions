@@ -51,7 +51,6 @@ type DailySleepResponse struct {
 	AwakeSleepSeconds  int               `json:"awakeSleepSeconds"`
 	SleepNeed          SleepNeed         `json:"sleepNeed"`
 	AverageSpo2        float64           `json:"averageSpO2Value"`
-	AverageHeartRate   float64           `json:"avgHeartRate"`
 	SleepScores        SleepScores       `json:"sleepScores"`
 }
 
@@ -59,6 +58,7 @@ type DailySummaryData struct {
 	CalendarDate format.GarminDate `json:"calendarDate"`
 	BodyBattery  BodyBattery       `json:"bodybattery"`
 	Stress       Stress            `json:"stress"`
+	HeartRate    HeartRate         `json:"heartRate"`
 }
 
 type BodyBattery struct {
@@ -73,6 +73,10 @@ type Stress struct {
 	LowStressDurationInMillis    int `json:"lowStressDurationInMillis"`
 	MediumStressDurationInMillis int `json:"mediumStressDurationInMillis"`
 	HighStressDurationInMillis   int `json:"highStressDurationInMillis"`
+}
+
+type HeartRate struct {
+	RestingValue float64 `json:"restingValue"`
 }
 
 type DailySummaryResponse struct {

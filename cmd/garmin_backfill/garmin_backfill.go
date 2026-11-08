@@ -10,7 +10,6 @@ import (
 	"intervals-functions/utils/format"
 	"intervals-functions/utils/ptr"
 	"log"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -208,8 +207,7 @@ func garminDailySleepAccumulator(
 			record.Respiration = ptr.Float(b.AverageRespiration)
 			record.SleepScore = ptr.Float(float64(b.SleepScores.Overall.Value))
 			record.SleepSeconds = ptr.Int(b.SleepTimeSeconds)
-			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier)
-			record.RestingHr = ptr.Int(int(math.Round(b.AverageHeartRate)))
+			record.SleepQuality = connect.GarminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier)
 			record.OxygenSaturation = ptr.CoalesceFloat(b.AverageSpo2)
 			record.SleepNeedMinutes = ptr.Int(b.SleepNeed.ActualMinutes)
 			record.SleepRemTimeSeconds = ptr.Int(b.RemSleepSeconds)
@@ -224,8 +222,7 @@ func garminDailySleepAccumulator(
 				Respiration:           ptr.CoalesceFloat(b.AverageRespiration),
 				SleepScore:            ptr.Float(float64(b.SleepScores.Overall.Value)),
 				SleepSeconds:          ptr.Int(b.SleepTimeSeconds),
-				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier),
-				RestingHr:             ptr.CoalesceInt(int(math.Round(b.AverageHeartRate))),
+				SleepQuality:          connect.GarminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier),
 				OxygenSaturation:      ptr.CoalesceFloat(b.AverageSpo2),
 				SleepNeedMinutes:      ptr.Int(b.SleepNeed.ActualMinutes),
 				SleepRemTimeSeconds:   ptr.Int(b.RemSleepSeconds),
@@ -277,20 +274,20 @@ func garminDailySummaryAccumulator(
 	for _, b := range battery {
 		if record, exists := records[b.CalendarDate]; exists {
 			record.BodyBatteryMin = ptr.Int(b.BodyBattery.MinValue)
-			record.BodyBatterMax = ptr.Int(b.BodyBattery.MaxValue)
+			record.BodyBatteryMax = ptr.Int(b.BodyBattery.MaxValue)
 			record.LowStressSeconds = ptr.Int(b.Stress.LowStressDurationInMillis / 1000)
 			record.MediumStressSeconds = ptr.Int(b.Stress.MediumStressDurationInMillis / 1000)
 			record.HighStressSeconds = ptr.Int(b.Stress.HighStressDurationInMillis / 1000)
 			record.RestStressSeconds = ptr.Int(b.Stress.RestDurationInMillis / 1000)
-			overall := garminStressToIntervalsStress(b.Stress.AverageLevel)
+			overall := connect.GarminStressToIntervalsStress(b.Stress.AverageLevel)
 			record.Stress = &overall
 			records[b.CalendarDate] = record
 		} else {
-			stressLevel := garminStressToIntervalsStress(b.Stress.AverageLevel)
+			stressLevel := connect.GarminStressToIntervalsStress(b.Stress.AverageLevel)
 			records[b.CalendarDate] = intervals.WellnessRecord{
 				ID:                  intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
 				BodyBatteryMin:      ptr.Int(b.BodyBattery.MinValue),
-				BodyBatterMax:       ptr.Int(b.BodyBattery.MaxValue),
+				BodyBatteryMax:      ptr.Int(b.BodyBattery.MaxValue),
 				LowStressSeconds:    ptr.Int(b.Stress.LowStressDurationInMillis / 1000),
 				MediumStressSeconds: ptr.Int(b.Stress.MediumStressDurationInMillis / 1000),
 				HighStressSeconds:   ptr.Int(b.Stress.HighStressDurationInMillis / 1000),
@@ -322,40 +319,6 @@ func garminHrvAccumulator(
 	}
 
 	return records
-}
-
-// garminStressToIntervalsStress maps a numerical garmin overall stress score to an intervals stress value
-func garminStressToIntervalsStress(stress int) intervals.StressLevel {
-	if stress <= 25 {
-		return intervals.LowStress
-	} else if stress > 25 && stress <= 50 {
-		return intervals.AvgStress
-	} else if stress > 50 && stress <= 75 {
-		return intervals.HighStress
-	} else {
-		return intervals.ExtremeStress
-	}
-}
-
-// garminSleepQualityToIntervalsSleepQuality maps a garmin sleep quality string to intervals sleep quality value
-func garminSleepQualityToIntervalsSleepQuality(q connect.GarminSleepQuality) *intervals.SleepQuality {
-	var quality *intervals.SleepQuality
-	switch q {
-	case connect.Excellent:
-		quality := intervals.GreatSleepQuality
-		return &quality
-	case connect.Good:
-		quality := intervals.GoodSleepQuality
-		return &quality
-	case connect.Fair:
-		quality := intervals.AverageSleepQuality
-		return &quality
-	case connect.Poor:
-		quality := intervals.PoorSleepQuality
-		return &quality
-	default:
-		return quality
-	}
 }
 
 // validDate checks the command supplied args for dates are in the correct format
