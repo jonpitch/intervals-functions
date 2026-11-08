@@ -361,7 +361,7 @@ func TestSleepAccumulator(t *testing.T) {
 	}
 }
 
-func TestGarminWeightAccumulator_Metric(t *testing.T) {
+func TestGarminWeightAccumulator(t *testing.T) {
 	timeA := format.GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	timeB := format.GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
 
@@ -491,6 +491,95 @@ func TestGarminWeightAccumulator_Metric(t *testing.T) {
 
 	for _, c := range cases {
 		result := garminWeightAccumulator(c.Entries, c.Wellness)
+		assert.Equal(t, c.Expected, result)
+	}
+}
+
+func TestHrvAccumulator(t *testing.T) {
+	timeA := format.GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timeB := format.GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
+
+	cases := []struct {
+		Entries  []garmin.HrvSummary
+		Wellness map[format.GarminDate]intervals.WellnessRecord
+		Expected map[format.GarminDate]intervals.WellnessRecord
+	}{
+		{
+			// nothing provided
+			Entries:  []garmin.HrvSummary{},
+			Wellness: map[format.GarminDate]intervals.WellnessRecord{},
+			Expected: map[format.GarminDate]intervals.WellnessRecord{},
+		},
+		{
+			// update an existing record
+			Entries: []garmin.HrvSummary{
+				{
+					CalendarDate: timeA,
+					LastNightAvg: 66.0,
+				},
+			},
+			Wellness: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID: intervals.WellnessRecordID("2026-01-01"),
+				},
+			},
+			Expected: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:       intervals.WellnessRecordID("2026-01-01"),
+					HrvRmssd: ptr.Float(66.0),
+				},
+			},
+		},
+		{
+			// add a new record
+			Entries: []garmin.HrvSummary{
+				{
+					CalendarDate: timeB,
+					LastNightAvg: 67.0,
+				},
+			},
+			Wellness: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:       intervals.WellnessRecordID("2026-01-01"),
+					HrvRmssd: ptr.Float(65.0),
+				},
+			},
+			Expected: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:       intervals.WellnessRecordID("2026-01-01"),
+					HrvRmssd: ptr.Float(65.0),
+				},
+				timeB: {
+					ID:       intervals.WellnessRecordID("2026-02-01"),
+					HrvRmssd: ptr.Float(67.0),
+				},
+			},
+		},
+		{
+			// overwrite an existing record
+			Entries: []garmin.HrvSummary{
+				{
+					CalendarDate: timeA,
+					LastNightAvg: 66.0,
+				},
+			},
+			Wellness: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:       intervals.WellnessRecordID("2026-01-01"),
+					HrvRmssd: ptr.Float(65.0),
+				},
+			},
+			Expected: map[format.GarminDate]intervals.WellnessRecord{
+				timeA: {
+					ID:       intervals.WellnessRecordID("2026-01-01"),
+					HrvRmssd: ptr.Float(66.0),
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		result := garminHrvAccumulator(c.Entries, c.Wellness)
 		assert.Equal(t, c.Expected, result)
 	}
 }

@@ -76,6 +76,11 @@ func garminToIntervals() (int, error) {
 		return 500, fmt.Errorf("get weight: %w", err)
 	}
 
+	hrvResponse, err := garminClient.GetHrvDailySummaries(yesterday, yesterday)
+	if err != nil {
+		return 500, fmt.Errorf("get hrv: %w", err)
+	}
+
 	fmt.Println("-- sleep")
 	fmt.Printf("date: %s\n", sleepResponse[0].CalendarDate)
 	fmt.Printf("light: %d\n", sleepResponse[0].LightSleepSeconds)
@@ -104,6 +109,9 @@ func garminToIntervals() (int, error) {
 	fmt.Printf("weight: %f\n", weightResponse[0].LatestWeight.WeightInGrams)
 	fmt.Printf("muscle: %f\n", weightResponse[0].LatestWeight.MuscleMassInGrams)
 	fmt.Printf("fat: %f\n", weightResponse[0].LatestWeight.BodyFat)
+	fmt.Println("-- hrv")
+	fmt.Printf("date: %s\n", hrvResponse[0].CalendarDate)
+	fmt.Printf("last night avg: %f\n", hrvResponse[0].LastNightAvg)
 
 	// TODO upate intervals wellness record
 

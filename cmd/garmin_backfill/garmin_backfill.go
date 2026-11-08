@@ -20,7 +20,7 @@ import (
 backfill data from garmin connect to intervals.icu.
 
 signature:
-go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run daily,stress,sleep,weight
+go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run daily,sleep,weight,hrv
 */
 func main() {
 	garminApiKey := os.Getenv("GARMIN_API_KEY")
@@ -68,6 +68,7 @@ func main() {
 	fetchDailySummary := false
 	fetchSleep := false
 	fetchWeight := false
+	fetchHrv := false
 
 	garminArgs := args[0]
 	garminOptions := strings.Split(garminArgs, ",")
@@ -79,6 +80,8 @@ func main() {
 			fetchSleep = true
 		case "weight":
 			fetchWeight = true
+		case "hrv":
+			fetchHrv = true
 		default:
 			log.Fatalf("unknown garmin option")
 		}
@@ -125,6 +128,19 @@ func main() {
 		}
 	}
 
+	if fetchHrv {
+		records, err = GarminApiDateRangeRequest(
+			dateRange,
+			garminClient.GetHrvDailySummaries,
+			records,
+			garminHrvAccumulator,
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	// collect wellness records to bulk update
 	var wellness []intervals.WellnessRecord
 	for _, w := range records {
@@ -150,7 +166,7 @@ func main() {
 }
 
 type GarminApiArrayResponseData interface {
-	garmin.DailySleepResponse | garmin.DailyWeightSummary | garmin.DailySummaryData
+	garmin.DailySleepResponse | garmin.DailyWeightSummary | garmin.DailySummaryData | garmin.HrvSummary
 }
 
 type GarminDateRange struct {
@@ -280,6 +296,27 @@ func garminDailySummaryAccumulator(
 				HighStressSeconds:   ptr.Int(b.Stress.HighStressDurationInMillis / 1000),
 				RestStressSeconds:   ptr.Int(b.Stress.RestDurationInMillis / 1000),
 				Stress:              &stressLevel,
+			}
+		}
+	}
+
+	return records
+}
+
+// garminHrvAccumulator converts HrvSummary records to intervals.WellnessRecord and accumulates
+// them on the provided map
+func garminHrvAccumulator(
+	hrv []garmin.HrvSummary,
+	records map[format.GarminDate]intervals.WellnessRecord,
+) map[format.GarminDate]intervals.WellnessRecord {
+	for _, h := range hrv {
+		if record, exists := records[h.CalendarDate]; exists {
+			record.HrvRmssd = ptr.Float(h.LastNightAvg)
+			records[h.CalendarDate] = record
+		} else {
+			records[h.CalendarDate] = intervals.WellnessRecord{
+				ID:       intervals.WellnessRecordID(h.CalendarDate.Format("2006-01-02")),
+				HrvRmssd: ptr.CoalesceFloat(h.LastNightAvg),
 			}
 		}
 	}

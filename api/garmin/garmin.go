@@ -94,6 +94,15 @@ type WeightResponse struct {
 	DailyWeightSummaries []DailyWeightSummary `json:"dailyWeightSummaries"`
 }
 
+type HrvDailySummaryResponse struct {
+	Summaries []HrvSummary `json:"hrvSummaries"`
+}
+
+type HrvSummary struct {
+	CalendarDate format.GarminDate `json:"calendarDate"`
+	LastNightAvg float64           `json:"lastNightAvg"`
+}
+
 // GetDailySleepSummariesByDate retrieves daily sleep data for a date range from the Garmin API.
 // documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
 func (c GarminClient) GetDailySleepSummariesByDate(startDate time.Time, endDate time.Time) ([]DailySleepResponse, error) {
@@ -137,6 +146,19 @@ func (c GarminClient) GetWeight(startDate time.Time, endDate time.Time) ([]Daily
 	}
 
 	return weight.DailyWeightSummaries, nil
+}
+
+// GetHrvDailySummaries retrieves daily HRV summaries for a date range.
+// documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
+func (c GarminClient) GetHrvDailySummaries(startDate time.Time, endDate time.Time) ([]HrvSummary, error) {
+	requestURL := dateRangeURL("/hrv-service/hrv/daily", startDate, endDate)
+
+	hrv, err := getJSON[HrvDailySummaryResponse](requestURL, c.token, "hrv")
+	if err != nil {
+		return []HrvSummary{}, fmt.Errorf("get hrv: %w", err)
+	}
+
+	return hrv.Summaries, nil
 }
 
 // dateRangeURL constructs a URL for Garmin API endpoints that require a start and end date.
