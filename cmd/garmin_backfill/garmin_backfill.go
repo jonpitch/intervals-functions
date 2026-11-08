@@ -10,6 +10,7 @@ import (
 	"intervals-functions/utils/format"
 	"intervals-functions/utils/ptr"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -281,6 +282,7 @@ func garminDailySummaryAccumulator(
 			record.RestStressSeconds = ptr.Int(b.Stress.RestDurationInMillis / 1000)
 			overall := connect.GarminStressToIntervalsStress(b.Stress.AverageLevel)
 			record.Stress = &overall
+			record.RestingHr = ptr.Int(int(math.Round(b.HeartRate.RestingValue)))
 			records[b.CalendarDate] = record
 		} else {
 			stressLevel := connect.GarminStressToIntervalsStress(b.Stress.AverageLevel)
@@ -293,6 +295,7 @@ func garminDailySummaryAccumulator(
 				HighStressSeconds:   ptr.Int(b.Stress.HighStressDurationInMillis / 1000),
 				RestStressSeconds:   ptr.Int(b.Stress.RestDurationInMillis / 1000),
 				Stress:              &stressLevel,
+				RestingHr:           ptr.Int(int(math.Round(b.HeartRate.RestingValue))),
 			}
 		}
 	}

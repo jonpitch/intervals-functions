@@ -107,6 +107,7 @@ func garminToIntervals() (int, error) {
 		SleepNeedMinutes:      ptr.Int(sleepResponse[0].SleepNeed.ActualMinutes),
 		SleepQuality:          connect.GarminSleepQualityToIntervalsSleepQuality(sleepResponse[0].SleepScores.Overall.Qaulifier),
 		SleepScore:            ptr.Float(float64(sleepResponse[0].SleepScores.Overall.Value)),
+		Respiration:           ptr.Float(sleepResponse[0].AverageRespiration),
 		// stress
 		Stress:              &stressAvg,
 		RestStressSeconds:   ptr.Int(dailySummaryResponse[0].Stress.RestDurationInMillis / 1000),
