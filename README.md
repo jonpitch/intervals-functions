@@ -81,7 +81,7 @@ currently works with Claude, and requires `ANTHROPIC_API_KEY` to be set.
 
 `make build`
 
-for release binaries: `make release` (writes `cronometer`, `cronometer_backfill`, and `garmin_backfill` to `bin/`)
+for release binaries: `make release` (writes `cronometer`, `cronometer_backfill`, `garmin`, and `garmin_backfill` to `bin/`)
 
 # testing
 
