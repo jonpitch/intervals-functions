@@ -5,7 +5,7 @@ test:
 	go test ./...
 
 netlify:
-	mkdir -p functions && go get ./... && CGO_ENABLED=0 go build -o functions/ ./cmd/cronometer ./cmd/weekly_digest
+	mkdir -p functions && go get ./... && CGO_ENABLED=0 go build -o functions/ ./cmd/cronometer ./cmd/weekly_digest ./cmd/garmin
 
 release:
-	mkdir -p bin && go get ./... && CGO_ENABLED=0 go build -o bin/ ./cmd/cronometer ./cmd/cronometer_backfill ./cmd/garmin_backfill
+	mkdir -p bin && go get ./... && CGO_ENABLED=0 go build -o bin/ ./cmd/cronometer ./cmd/cronometer_backfill ./cmd/garmin_backfill ./cmd/garmin

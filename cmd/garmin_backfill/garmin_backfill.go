@@ -11,7 +11,6 @@ import (
 	"intervals-functions/utils/ptr"
 	"log"
 	"math"
-	"os"
 	"strings"
 	"time"
 )
@@ -23,15 +22,11 @@ signature:
 go run garmin_backfill.go -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run daily,sleep,weight,hrv
 */
 func main() {
-	garminApiKey := os.Getenv("GARMIN_API_KEY")
-	if garminApiKey == "" {
-		log.Fatal("GARMIN_API_KEY is not set")
-	}
-
 	fromDateStr := flag.String("from", "", "start date of backfill (YYYY-MM-DD format)")
 	toDateStr := flag.String("to", "", "last day of backfill (YYYY-MM-DD format)")
 	intervalsAthleteID := flag.String("athleteId", "", "intervals.icu athlete ID")
 	intervalsApiKey := flag.String("apiKey", "", "intervals.icu API key")
+	garminApiKey := flag.String("garminApiKey", "", "garmin connect API key")
 	dryRun := flag.Bool("dry-run", false, "Do not persist data to intervals.icu, just print")
 	flag.Parse()
 
@@ -48,6 +43,10 @@ func main() {
 		log.Fatal("from date and to date are required, and in the format of YYYY-MM-DD")
 	}
 
+	if garminApiKey == nil {
+		log.Fatal("garmin API key is required")
+	}
+
 	from, err := validDate(*fromDateStr)
 	if err != nil {
 		log.Fatal("from date is invalid, use YYYY-MM-DD format")
@@ -58,7 +57,7 @@ func main() {
 		log.Fatal("to date is invalid, use YYYY-MM-DD format")
 	}
 
-	garminClient, err := garmin.NewGarminClient(garminApiKey)
+	garminClient, err := garmin.NewGarminClient(*garminApiKey)
 	if err != nil {
 		log.Fatal(err)
 	}
