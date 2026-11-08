@@ -10,6 +10,7 @@ import (
 	"intervals-functions/utils/format"
 	"intervals-functions/utils/ptr"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -65,7 +66,6 @@ func main() {
 	dateRange := NewGarminDateRange(from, to)
 
 	fetchDailySummary := false
-	fetchStress := false
 	fetchSleep := false
 	fetchWeight := false
 
@@ -75,8 +75,6 @@ func main() {
 		switch o {
 		case "daily":
 			fetchDailySummary = true
-		case "stress":
-			fetchStress = true
 		case "sleep":
 			fetchSleep = true
 		case "weight":
@@ -94,19 +92,6 @@ func main() {
 			garminClient.GetDailySummary,
 			records,
 			garminDailySummaryAccumulator,
-		)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	if fetchStress {
-		records, err = GarminApiDateRangeRequest(
-			dateRange,
-			garminClient.GetDailyStress,
-			records,
-			garminStressAccumulator,
 		)
 
 		if err != nil {
@@ -165,7 +150,7 @@ func main() {
 }
 
 type GarminApiArrayResponseData interface {
-	garmin.DailySleepResponse | garmin.DailyWeightSummary | garmin.DailyStressResponse | garmin.DailySummaryData
+	garmin.DailySleepResponse | garmin.DailyWeightSummary | garmin.DailySummaryData
 }
 
 type GarminDateRange struct {
@@ -205,12 +190,10 @@ func garminDailySleepAccumulator(
 	for _, b := range sleepResponses {
 		if record, exists := records[b.CalendarDate]; exists {
 			record.Respiration = ptr.Float(b.AverageRespiration)
-			// TODO
-			// record.SleepScore = ptr.Float(s.Values.SleepScore)
-			// record.HrvRmssd = ptr.CoalesceFloat(s.Values.AverageOvernightHrv)
+			record.SleepScore = ptr.Float(float64(b.SleepScores.Overall.Value))
 			record.SleepSeconds = ptr.Int(b.SleepTimeSeconds)
-			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(b.SleepQuality)
-			record.RestingHr = ptr.Int(b.AverageHeartRate)
+			record.SleepQuality = garminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier)
+			record.RestingHr = ptr.Int(int(math.Round(b.AverageHeartRate)))
 			record.OxygenSaturation = ptr.CoalesceFloat(b.AverageSpo2)
 			record.SleepNeedMinutes = ptr.Int(b.SleepNeed.ActualMinutes)
 			record.SleepRemTimeSeconds = ptr.Int(b.RemSleepSeconds)
@@ -221,14 +204,12 @@ func garminDailySleepAccumulator(
 			records[b.CalendarDate] = record
 		} else {
 			records[b.CalendarDate] = intervals.WellnessRecord{
-				ID:          intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
-				Respiration: ptr.CoalesceFloat(b.AverageRespiration),
-				// TODO
-				// SleepScore:            ptr.Float(s.Values.SleepScore),
-				// HrvRmssd:              ptr.CoalesceFloat(s.Values.AverageOvernightHrv),
+				ID:                    intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
+				Respiration:           ptr.CoalesceFloat(b.AverageRespiration),
+				SleepScore:            ptr.Float(float64(b.SleepScores.Overall.Value)),
 				SleepSeconds:          ptr.Int(b.SleepTimeSeconds),
-				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(b.SleepQuality),
-				RestingHr:             ptr.CoalesceInt(b.AverageHeartRate),
+				SleepQuality:          garminSleepQualityToIntervalsSleepQuality(b.SleepScores.Overall.Qaulifier),
+				RestingHr:             ptr.CoalesceInt(int(math.Round(b.AverageHeartRate))),
 				OxygenSaturation:      ptr.CoalesceFloat(b.AverageSpo2),
 				SleepNeedMinutes:      ptr.Int(b.SleepNeed.ActualMinutes),
 				SleepRemTimeSeconds:   ptr.Int(b.RemSleepSeconds),
@@ -271,37 +252,6 @@ func garminWeightAccumulator(
 	return records
 }
 
-// garminStressAccumulator converts StressEntry records to intervals.WellnessRecord and accumulates
-// them on the provided map
-func garminStressAccumulator(
-	stress []garmin.DailyStressResponse,
-	records map[format.GarminDate]intervals.WellnessRecord,
-) map[format.GarminDate]intervals.WellnessRecord {
-	for _, b := range stress {
-		if record, exists := records[b.CalendarDate]; exists {
-			record.LowStressSeconds = ptr.Int(b.Values.LowStressDurationSeconds)
-			record.MediumStressSeconds = ptr.Int(b.Values.MediumStressDurationSeconds)
-			record.HighStressSeconds = ptr.Int(b.Values.HighStressDurationSeconds)
-			record.RestStressSeconds = ptr.Int(b.Values.RestStressDurationSeconds)
-			overall := garminStressToIntervalsStress(b.Values.OverallStressLevel)
-			record.Stress = &overall
-			records[b.CalendarDate] = record
-		} else {
-			overall := garminStressToIntervalsStress(b.Values.OverallStressLevel)
-			records[b.CalendarDate] = intervals.WellnessRecord{
-				ID:                  intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
-				LowStressSeconds:    ptr.Int(b.Values.LowStressDurationSeconds),
-				MediumStressSeconds: ptr.Int(b.Values.MediumStressDurationSeconds),
-				HighStressSeconds:   ptr.Int(b.Values.HighStressDurationSeconds),
-				RestStressSeconds:   ptr.Int(b.Values.RestStressDurationSeconds),
-				Stress:              &overall,
-			}
-		}
-	}
-
-	return records
-}
-
 // garminDailySummaryAccumulator converts DailySummaryData records to intervals.WellnessRecord and accumulates
 // them on the provided map
 func garminDailySummaryAccumulator(
@@ -312,12 +262,24 @@ func garminDailySummaryAccumulator(
 		if record, exists := records[b.CalendarDate]; exists {
 			record.BodyBatteryMin = ptr.Int(b.BodyBattery.MinValue)
 			record.BodyBatterMax = ptr.Int(b.BodyBattery.MaxValue)
+			record.LowStressSeconds = ptr.Int(b.Stress.LowStressDurationInMillis / 1000)
+			record.MediumStressSeconds = ptr.Int(b.Stress.MediumStressDurationInMillis / 1000)
+			record.HighStressSeconds = ptr.Int(b.Stress.HighStressDurationInMillis / 1000)
+			record.RestStressSeconds = ptr.Int(b.Stress.RestDurationInMillis / 1000)
+			overall := garminStressToIntervalsStress(b.Stress.AverageLevel)
+			record.Stress = &overall
 			records[b.CalendarDate] = record
 		} else {
+			stressLevel := garminStressToIntervalsStress(b.Stress.AverageLevel)
 			records[b.CalendarDate] = intervals.WellnessRecord{
-				ID:             intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
-				BodyBatteryMin: ptr.Int(b.BodyBattery.MinValue),
-				BodyBatterMax:  ptr.Int(b.BodyBattery.MaxValue),
+				ID:                  intervals.WellnessRecordID(b.CalendarDate.Format("2006-01-02")),
+				BodyBatteryMin:      ptr.Int(b.BodyBattery.MinValue),
+				BodyBatterMax:       ptr.Int(b.BodyBattery.MaxValue),
+				LowStressSeconds:    ptr.Int(b.Stress.LowStressDurationInMillis / 1000),
+				MediumStressSeconds: ptr.Int(b.Stress.MediumStressDurationInMillis / 1000),
+				HighStressSeconds:   ptr.Int(b.Stress.HighStressDurationInMillis / 1000),
+				RestStressSeconds:   ptr.Int(b.Stress.RestDurationInMillis / 1000),
+				Stress:              &stressLevel,
 			}
 		}
 	}

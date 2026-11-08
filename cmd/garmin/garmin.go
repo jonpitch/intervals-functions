@@ -71,11 +71,6 @@ func garminToIntervals() (int, error) {
 		return 500, fmt.Errorf("get daily summary: %w", err)
 	}
 
-	stressResponse, err := garminClient.GetDailyStress(yesterday, yesterday)
-	if err != nil {
-		return 500, fmt.Errorf("get daily stress: %w", err)
-	}
-
 	weightResponse, err := garminClient.GetWeight(yesterday, yesterday)
 	if err != nil {
 		return 500, fmt.Errorf("get weight: %w", err)
@@ -89,21 +84,25 @@ func garminToIntervals() (int, error) {
 	fmt.Printf("awake: %d\n", sleepResponse[0].AwakeSleepSeconds)
 	fmt.Printf("baseline: %d\n", sleepResponse[0].SleepNeed.BaselineMinutes)
 	fmt.Printf("actual: %d\n", sleepResponse[0].SleepNeed.ActualMinutes)
+	fmt.Printf("spo2: %f\n", sleepResponse[0].AverageSpo2)
+	fmt.Printf("hr: %f\n", sleepResponse[0].AverageHeartRate)
+	fmt.Printf("quality: %s\n", sleepResponse[0].SleepScores.Overall.Qaulifier)
+	fmt.Printf("score: %d\n", sleepResponse[0].SleepScores.Overall.Value)
 	fmt.Println("-- body battery")
 	fmt.Printf("date: %s\n", dailySummaryResponse[0].CalendarDate)
 	fmt.Printf("min bat: %d\n", dailySummaryResponse[0].BodyBattery.MinValue)
 	fmt.Printf("max bat: %d\n", dailySummaryResponse[0].BodyBattery.MaxValue)
 	fmt.Println("-- stress")
-	fmt.Printf("date: %s\n", stressResponse[0].CalendarDate)
-	fmt.Printf("overall: %d\n", stressResponse[0].Values.OverallStressLevel)
-	fmt.Printf("rest: %d\n", stressResponse[0].Values.RestStressDurationSeconds)
-	fmt.Printf("low: %d\n", stressResponse[0].Values.LowStressDurationSeconds)
-	fmt.Printf("med: %d\n", stressResponse[0].Values.MediumStressDurationSeconds)
-	fmt.Printf("high: %d\n", stressResponse[0].Values.HighStressDurationSeconds)
+	fmt.Printf("date: %s\n", dailySummaryResponse[0].CalendarDate)
+	fmt.Printf("overall: %d\n", dailySummaryResponse[0].Stress.TotalDurationInMillis)
+	fmt.Printf("rest: %d\n", dailySummaryResponse[0].Stress.RestDurationInMillis)
+	fmt.Printf("low: %d\n", dailySummaryResponse[0].Stress.LowStressDurationInMillis)
+	fmt.Printf("med: %d\n", dailySummaryResponse[0].Stress.MediumStressDurationInMillis)
+	fmt.Printf("high: %d\n", dailySummaryResponse[0].Stress.HighStressDurationInMillis)
 	fmt.Println("-- weight")
 	fmt.Printf("date: %s\n", weightResponse[0].LatestWeight.CalendarDate)
 	fmt.Printf("weight: %f\n", weightResponse[0].LatestWeight.WeightInGrams)
-	fmt.Printf("muscle: %d\n", weightResponse[0].LatestWeight.MuscleMassInGrams)
+	fmt.Printf("muscle: %f\n", weightResponse[0].LatestWeight.MuscleMassInGrams)
 	fmt.Printf("fat: %f\n", weightResponse[0].LatestWeight.BodyFat)
 
 	// TODO upate intervals wellness record

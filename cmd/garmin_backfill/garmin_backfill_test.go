@@ -35,140 +35,8 @@ func TestGarminStressToIntervalsStress(t *testing.T) {
 	}
 }
 
-func TestGarminStressAccumulator(t *testing.T) {
-	overallStress := garminStressToIntervalsStress(20)
-	timeA := format.GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	timeB := format.GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
-
-	cases := []struct {
-		Entries  []garmin.DailyStressResponse
-		Wellness map[format.GarminDate]intervals.WellnessRecord
-		Expected map[format.GarminDate]intervals.WellnessRecord
-	}{
-		{
-			// nothing provided
-			Entries:  []garmin.DailyStressResponse{},
-			Wellness: map[format.GarminDate]intervals.WellnessRecord{},
-			Expected: map[format.GarminDate]intervals.WellnessRecord{},
-		},
-		{
-			// update an existing record
-			Entries: []garmin.DailyStressResponse{
-				{
-					CalendarDate: timeA,
-					Values: garmin.StressValues{
-						OverallStressLevel:          20,
-						RestStressDurationSeconds:   100,
-						LowStressDurationSeconds:    200,
-						MediumStressDurationSeconds: 300,
-						HighStressDurationSeconds:   400,
-					},
-				},
-			},
-			Wellness: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin: ptr.Int(30),
-					BodyBatterMax:  ptr.Int(100),
-				},
-			},
-			Expected: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:                  intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin:      ptr.Int(30),
-					BodyBatterMax:       ptr.Int(100),
-					Stress:              &overallStress,
-					RestStressSeconds:   ptr.Int(100),
-					LowStressSeconds:    ptr.Int(200),
-					MediumStressSeconds: ptr.Int(300),
-					HighStressSeconds:   ptr.Int(400),
-				},
-			},
-		},
-		{
-			// add a new record
-			Entries: []garmin.DailyStressResponse{
-				{
-					CalendarDate: timeB,
-					Values: garmin.StressValues{
-						OverallStressLevel:          20,
-						RestStressDurationSeconds:   100,
-						LowStressDurationSeconds:    200,
-						MediumStressDurationSeconds: 300,
-						HighStressDurationSeconds:   400,
-					},
-				},
-			},
-			Wellness: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin: ptr.Int(30),
-					BodyBatterMax:  ptr.Int(100),
-				},
-			},
-			Expected: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin: ptr.Int(30),
-					BodyBatterMax:  ptr.Int(100),
-				},
-				timeB: {
-					ID:                  intervals.WellnessRecordID("2026-02-01"),
-					Stress:              &overallStress,
-					RestStressSeconds:   ptr.Int(100),
-					LowStressSeconds:    ptr.Int(200),
-					MediumStressSeconds: ptr.Int(300),
-					HighStressSeconds:   ptr.Int(400),
-				},
-			},
-		},
-		{
-			// overwrite an existing record
-			Entries: []garmin.DailyStressResponse{
-				{
-					CalendarDate: timeA,
-					Values: garmin.StressValues{
-						OverallStressLevel:          20,
-						RestStressDurationSeconds:   100,
-						LowStressDurationSeconds:    200,
-						MediumStressDurationSeconds: 300,
-						HighStressDurationSeconds:   400,
-					},
-				},
-			},
-			Wellness: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:                  intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin:      ptr.Int(30),
-					BodyBatterMax:       ptr.Int(100),
-					RestStressSeconds:   ptr.Int(900),
-					LowStressSeconds:    ptr.Int(800),
-					MediumStressSeconds: ptr.Int(700),
-					HighStressSeconds:   ptr.Int(600),
-				},
-			},
-			Expected: map[format.GarminDate]intervals.WellnessRecord{
-				timeA: {
-					ID:                  intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin:      ptr.Int(30),
-					BodyBatterMax:       ptr.Int(100),
-					Stress:              &overallStress,
-					RestStressSeconds:   ptr.Int(100),
-					LowStressSeconds:    ptr.Int(200),
-					MediumStressSeconds: ptr.Int(300),
-					HighStressSeconds:   ptr.Int(400),
-				},
-			},
-		},
-	}
-
-	for _, c := range cases {
-		result := garminStressAccumulator(c.Entries, c.Wellness)
-		assert.Equal(t, c.Expected, result)
-	}
-}
-
 func TestDailySummaryAccumulator(t *testing.T) {
+	overallStress := garminStressToIntervalsStress(20)
 	timeA := format.GarminDate{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	timeB := format.GarminDate{Time: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}
 
@@ -192,6 +60,13 @@ func TestDailySummaryAccumulator(t *testing.T) {
 						MinValue: 30,
 						MaxValue: 100,
 					},
+					Stress: garmin.Stress{
+						AverageLevel:                 20,
+						RestDurationInMillis:         100 * 1000,
+						LowStressDurationInMillis:    200 * 1000,
+						MediumStressDurationInMillis: 300 * 1000,
+						HighStressDurationInMillis:   400 * 1000,
+					},
 				},
 			},
 			Wellness: map[format.GarminDate]intervals.WellnessRecord{
@@ -202,10 +77,15 @@ func TestDailySummaryAccumulator(t *testing.T) {
 			},
 			Expected: map[format.GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					Respiration:    ptr.Float(12.0),
-					BodyBatteryMin: ptr.Int(30),
-					BodyBatterMax:  ptr.Int(100),
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					Respiration:         ptr.Float(12.0),
+					BodyBatteryMin:      ptr.Int(30),
+					BodyBatterMax:       ptr.Int(100),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
 				},
 			},
 		},
@@ -217,6 +97,13 @@ func TestDailySummaryAccumulator(t *testing.T) {
 					BodyBattery: garmin.BodyBattery{
 						MinValue: 25,
 						MaxValue: 95,
+					},
+					Stress: garmin.Stress{
+						AverageLevel:                 20,
+						RestDurationInMillis:         100 * 1000,
+						LowStressDurationInMillis:    200 * 1000,
+						MediumStressDurationInMillis: 300 * 1000,
+						HighStressDurationInMillis:   400 * 1000,
 					},
 				},
 			},
@@ -234,9 +121,14 @@ func TestDailySummaryAccumulator(t *testing.T) {
 					BodyBatterMax:  ptr.Int(90),
 				},
 				timeB: {
-					ID:             intervals.WellnessRecordID("2026-02-01"),
-					BodyBatteryMin: ptr.Int(25),
-					BodyBatterMax:  ptr.Int(95),
+					ID:                  intervals.WellnessRecordID("2026-02-01"),
+					BodyBatteryMin:      ptr.Int(25),
+					BodyBatterMax:       ptr.Int(95),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
 				},
 			},
 		},
@@ -249,20 +141,36 @@ func TestDailySummaryAccumulator(t *testing.T) {
 						MinValue: 45,
 						MaxValue: 65,
 					},
+					Stress: garmin.Stress{
+						AverageLevel:                 20,
+						RestDurationInMillis:         100 * 1000,
+						LowStressDurationInMillis:    200 * 1000,
+						MediumStressDurationInMillis: 300 * 1000,
+						HighStressDurationInMillis:   400 * 1000,
+					},
 				},
 			},
 			Wellness: map[format.GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin: ptr.Int(32),
-					BodyBatterMax:  ptr.Int(67),
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:      ptr.Int(32),
+					BodyBatterMax:       ptr.Int(67),
+					RestStressSeconds:   ptr.Int(900),
+					LowStressSeconds:    ptr.Int(800),
+					MediumStressSeconds: ptr.Int(700),
+					HighStressSeconds:   ptr.Int(600),
 				},
 			},
 			Expected: map[format.GarminDate]intervals.WellnessRecord{
 				timeA: {
-					ID:             intervals.WellnessRecordID("2026-01-01"),
-					BodyBatteryMin: ptr.Int(45),
-					BodyBatterMax:  ptr.Int(65),
+					ID:                  intervals.WellnessRecordID("2026-01-01"),
+					BodyBatteryMin:      ptr.Int(45),
+					BodyBatterMax:       ptr.Int(65),
+					Stress:              &overallStress,
+					RestStressSeconds:   ptr.Int(100),
+					LowStressSeconds:    ptr.Int(200),
+					MediumStressSeconds: ptr.Int(300),
+					HighStressSeconds:   ptr.Int(400),
 				},
 			},
 		},
@@ -300,14 +208,17 @@ func TestSleepAccumulator(t *testing.T) {
 					SleepTimeSeconds:  100,
 					DeepSleepSeconds:  2,
 					AwakeSleepSeconds: 3,
-					SleepQuality:      connect.Excellent,
-					// Spo2:                  95.0,
+					SleepScores: garmin.SleepScores{
+						Overall: garmin.OverallSleepScore{
+							Value:     99,
+							Qaulifier: connect.Excellent,
+						},
+					},
+					AverageSpo2:       95.0,
 					LightSleepSeconds: 4,
-					// AverageOvernightHrv:   66,
 					SleepNeed: garmin.SleepNeed{
 						ActualMinutes: 9,
 					},
-					// SleepScore: 99,
 				},
 			},
 			Wellness: map[format.GarminDate]intervals.WellnessRecord{
@@ -342,18 +253,21 @@ func TestSleepAccumulator(t *testing.T) {
 				{
 					CalendarDate:      timeB,
 					RemSleepSeconds:   2,
-					AverageHeartRate:  41,
+					AverageHeartRate:  41.5,
 					SleepTimeSeconds:  101,
 					DeepSleepSeconds:  21,
 					AwakeSleepSeconds: 31,
-					SleepQuality:      connect.Excellent,
-					// Spo2:                  0.0,
+					SleepScores: garmin.SleepScores{
+						Overall: garmin.OverallSleepScore{
+							Value:     100,
+							Qaulifier: connect.Excellent,
+						},
+					},
+					AverageSpo2:       95.0,
 					LightSleepSeconds: 5,
-					// AverageOvernightHrv:   0.0,
 					SleepNeed: garmin.SleepNeed{
 						ActualMinutes: 10,
 					},
-					// SleepScore:            100,
 				},
 			},
 			Wellness: map[format.GarminDate]intervals.WellnessRecord{
@@ -372,7 +286,7 @@ func TestSleepAccumulator(t *testing.T) {
 				timeB: {
 					ID:                    intervals.WellnessRecordID("2026-02-01"),
 					SleepRemTimeSeconds:   ptr.Int(2),
-					RestingHr:             ptr.Int(41),
+					RestingHr:             ptr.Int(42),
 					SleepSeconds:          ptr.Int(101),
 					SleepDeepTimeSeconds:  ptr.Int(21),
 					SleepAwakeTimeSeconds: ptr.Int(31),
@@ -393,14 +307,17 @@ func TestSleepAccumulator(t *testing.T) {
 					SleepTimeSeconds:  100,
 					DeepSleepSeconds:  2,
 					AwakeSleepSeconds: 3,
-					SleepQuality:      connect.Excellent,
-					// Spo2:                  95.0,
+					SleepScores: garmin.SleepScores{
+						Overall: garmin.OverallSleepScore{
+							Value:     99,
+							Qaulifier: connect.Excellent,
+						},
+					},
+					AverageSpo2:       95.0,
 					LightSleepSeconds: 4,
-					// AverageOvernightHrv:   66,
 					SleepNeed: garmin.SleepNeed{
 						ActualMinutes: 9,
 					},
-					// SleepScore:            99,
 				},
 			},
 			Wellness: map[format.GarminDate]intervals.WellnessRecord{

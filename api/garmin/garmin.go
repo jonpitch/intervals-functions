@@ -32,23 +32,33 @@ type SleepNeed struct {
 	ActualMinutes   int `json:"actual"`
 }
 
+type OverallSleepScore struct {
+	Value     int                        `json:"value"`
+	Qaulifier connect.GarminSleepQuality `json:"qualifierKey"`
+}
+
+type SleepScores struct {
+	Overall OverallSleepScore `json:"overall"`
+}
+
 type DailySleepResponse struct {
-	CalendarDate       format.GarminDate          `json:"calendarDate"`
-	SleepTimeSeconds   int                        `json:"sleepTimeSeconds"`
-	AverageRespiration float64                    `json:"averageRespirationValue"`
-	DeepSleepSeconds   int                        `json:"deepSleepSeconds"`
-	LightSleepSeconds  int                        `json:"lightSleepSeconds"`
-	RemSleepSeconds    int                        `json:"remSleepSeconds"`
-	AwakeSleepSeconds  int                        `json:"awakeSleepSeconds"`
-	SleepNeed          SleepNeed                  `json:"sleepNeed"`
-	AverageSpo2        float64                    `json:"averageSpO2Value"`
-	AverageHeartRate   int                        `json:"avgHeartRate"`
-	SleepQuality       connect.GarminSleepQuality `json:"sleepQualityTypePK"`
+	CalendarDate       format.GarminDate `json:"calendarDate"`
+	SleepTimeSeconds   int               `json:"sleepTimeSeconds"`
+	AverageRespiration float64           `json:"averageRespirationValue"`
+	DeepSleepSeconds   int               `json:"deepSleepSeconds"`
+	LightSleepSeconds  int               `json:"lightSleepSeconds"`
+	RemSleepSeconds    int               `json:"remSleepSeconds"`
+	AwakeSleepSeconds  int               `json:"awakeSleepSeconds"`
+	SleepNeed          SleepNeed         `json:"sleepNeed"`
+	AverageSpo2        float64           `json:"averageSpO2Value"`
+	AverageHeartRate   float64           `json:"avgHeartRate"`
+	SleepScores        SleepScores       `json:"sleepScores"`
 }
 
 type DailySummaryData struct {
 	CalendarDate format.GarminDate `json:"calendarDate"`
 	BodyBattery  BodyBattery       `json:"bodybattery"`
+	Stress       Stress            `json:"stress"`
 }
 
 type BodyBattery struct {
@@ -56,21 +66,17 @@ type BodyBattery struct {
 	MaxValue int `json:"maxValue"`
 }
 
+type Stress struct {
+	AverageLevel                 int `json:"avgLevel"`
+	TotalDurationInMillis        int `json:"totalDurationInMillis"`
+	RestDurationInMillis         int `json:"restDurationInMillis"`
+	LowStressDurationInMillis    int `json:"lowStressDurationInMillis"`
+	MediumStressDurationInMillis int `json:"mediumStressDurationInMillis"`
+	HighStressDurationInMillis   int `json:"highStressDurationInMillis"`
+}
+
 type DailySummaryResponse struct {
 	Data []DailySummaryData `json:"data"`
-}
-
-type StressValues struct {
-	OverallStressLevel          int `json:"overallStressLevel"`
-	HighStressDurationSeconds   int `json:"highStressDuration"`
-	LowStressDurationSeconds    int `json:"lowStressDuration"`
-	RestStressDurationSeconds   int `json:"restStressDuration"`
-	MediumStressDurationSeconds int `json:"mediumStressDuration"`
-}
-
-type DailyStressResponse struct {
-	CalendarDate format.GarminDate `json:"calendarDate"`
-	Values       StressValues      `json:"values"`
 }
 
 type LatestWeight struct {
@@ -118,19 +124,6 @@ func (c GarminClient) GetDailySummary(startDate time.Time, endDate time.Time) ([
 	}
 
 	return dailySummary.Data, nil
-}
-
-// GetDailyStress retrieves stress reports for a date range.
-// documentation: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
-func (c GarminClient) GetDailyStress(startDate time.Time, endDate time.Time) ([]DailyStressResponse, error) {
-	requestURL := dateRangeURL("/usersummary-service/stats/stress/daily", startDate, endDate)
-
-	stress, err := getJSON[[]DailyStressResponse](requestURL, c.token, "daily stress")
-	if err != nil {
-		return []DailyStressResponse{}, fmt.Errorf("get daily stress: %w", err)
-	}
-
-	return stress, nil
 }
 
 // GetWeight retrieves weight data for a date range.
