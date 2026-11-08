@@ -27,7 +27,7 @@ go run cronometer.go
 
 # to get a date range of macros from cronometer
 cd cmd/cronometer_backfill
-go run backfill.go 2026-01-01 2026-03-01
+go run cronometer_backfill.go 2026-01-01 2026-03-01
 ```
 
 ## garmin
@@ -51,33 +51,24 @@ before backfilling any data, there is some required setup in intervals. the foll
 
 i have already created these fields and made them publicly available (search for these names or my username `pitcherella`). alternatively, you can create these fields however you want, but the values listed above *must* be the `Code` for the field. all of those values are integers, so i would also recommend a format of `0.f`. for the fields that are seconds or minutes, intervals lets you choose a conversion so that they're represented in hours/minutes/seconds if you wish.
 
-`garmin.go` works by mimicing garmin connect web requests. there's no login implemented, so we'll need some data to make authenticated requests to garmin:
-- log in to Garmin Connect
-- open developer tools (in Chrome: View -> Developer -> Developer Tools)
-- click on the Network tab, and select the `Fetch/XHR` tab
-- in Garmin Connect, navigate to a Health Stats page, like Sleep. you should see a request pop up in Developer tools that looks like today's date (`2026-01-01`)
-- right click on that date, `Copy` -> `Copy as cURL`
-- relative to the `garmin.go` binary you will execute, `mkdir request`
-- create `curl.txt` in that folder and paste your cURL response
-
-Garmin sessions don't last forever, so you may need to repeat these steps periodically. Now you can run the backfill for your desired metrics and date ranges.
+you need to create a Garmin API personal token, documentation found [here](https://developer.garmin.com/gc-developer-program/overview/).
 
 `garmin.go` supports the following metrics:
-- **body battery:** low, high
-- **respiration:** average sleep respiration
-- **stress:** overall, high, medium, low, rest
+- **daily:** overall, high, medium, low, rest
 - **sleep:** score, total sleep time, spO2, stages, resting HR, sleep need, sleep quality
 - **weight:** latest weight
+- **hrv:** 
 
 to run the backfill:
 ```
-./bin/garmin -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -dry-run bodybattery,stress,respiration,sleep,weight
+./bin/garmin_backfill -from=YYYY-MM-DD -to=YYYY-MM-DD -athleteId=XYZ -apiKey=ABC -garminToken=TOKEN -dry-run daily,sleep,weight,hrv
 ```
 
 - `from` the starting date of your backfill
 - `to` the end date of your backfill
 - `athleteId` your intervals.icu athlete ID
 - `apiKey` your intervals.icu API key
+- `garminApiKey` your Garmin API personal token
 - `dry-run` (optional) will print the results to the terminal and not send any data to intervals
 
 ## weekly digest
@@ -90,7 +81,7 @@ currently works with Claude, and requires `ANTHROPIC_API_KEY` to be set.
 
 `make build`
 
-for the release binary: `make release`
+for release binaries: `make release` (writes `cronometer`, `cronometer_backfill`, `garmin`, and `garmin_backfill` to `bin/`)
 
 # testing
 
@@ -99,9 +90,8 @@ for the release binary: `make release`
 # notes
 
 - [gocronometer](https://github.com/jrmycanady/gocronometer) doesn't work with 2FA
-- running `backfill` with large date ranges can lead to throttling from cronometer. i would recommend doing small date ranges and spreading them out over hours.
+- running `cronometer_backfill` with large date ranges can lead to throttling from cronometer. i would recommend doing small date ranges and spreading them out over hours.
 - `NETLIFY` as an environment variable is not available at runtime, only [these](https://docs.netlify.com/build/functions/environment-variables/#functions) are. `IS_NETLIFY` is the safe way to denote if `cronometer.go` is running in the netlify environment.
 - netlify functions run in UTC time.
-- garmin backfill works by leveraging the same requets the garmin connect web app uses. as such, this project is **for personal use only** and could break at any time.
 - spO2 has no 4 week window in Garmin Connect, and is not supported for backfill.
 - for weight: the garmin API and intervals are both in metric as far as I can tell. weight from garmin is reported in grams, and intervals is looking for the weight value in kilograms.

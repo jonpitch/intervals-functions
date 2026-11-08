@@ -1,7 +1,7 @@
 package main
 
 import (
-	intervals "intervals-functions/api"
+	"intervals-functions/api/intervals"
 	"intervals-functions/utils/ptr"
 	"testing"
 	"time"
@@ -34,7 +34,7 @@ func TestTrimWellnessRecords(t *testing.T) {
 			Motivation:            ptr.Int(52),
 			Injury:                ptr.Int(62),
 			BodyBatteryMin:        ptr.Int(72),
-			BodyBatterMax:         ptr.Int(82),
+			BodyBatteryMax:        ptr.Int(82),
 			RestStressSeconds:     ptr.Int(92),
 			LowStressSeconds:      ptr.Int(102),
 			MediumStressSeconds:   ptr.Int(13),
@@ -65,7 +65,7 @@ func TestTrimWellnessRecords(t *testing.T) {
 			Motivation:            ptr.Int(52),
 			Injury:                ptr.Int(62),
 			BodyBatteryMin:        ptr.Int(72),
-			BodyBatterMax:         ptr.Int(82),
+			BodyBatteryMax:        ptr.Int(82),
 			SleepNeedMinutes:      ptr.Int(33),
 			SleepRemTimeSeconds:   ptr.Int(43),
 			SleepDeepTimeSeconds:  ptr.Int(53),
@@ -88,7 +88,7 @@ func TestWindowAverages(t *testing.T) {
 					SleepScore:            ptr.Float(100.0),
 					Respiration:           ptr.Float(9),
 					BodyBatteryMin:        ptr.Int(33),
-					BodyBatterMax:         ptr.Int(100),
+					BodyBatteryMax:        ptr.Int(100),
 					SleepNeedMinutes:      ptr.Int(400),
 					SleepRemTimeSeconds:   ptr.Int(4000),
 					SleepDeepTimeSeconds:  ptr.Int(3000),
@@ -106,7 +106,7 @@ func TestWindowAverages(t *testing.T) {
 					SleepScore:            ptr.Float(60.0),
 					Respiration:           ptr.Float(8),
 					BodyBatteryMin:        ptr.Int(25),
-					BodyBatterMax:         ptr.Int(95),
+					BodyBatteryMax:        ptr.Int(95),
 					SleepNeedMinutes:      ptr.Int(420),
 					SleepRemTimeSeconds:   ptr.Int(4200),
 					SleepDeepTimeSeconds:  ptr.Int(3200),
