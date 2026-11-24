@@ -117,7 +117,8 @@ func garminToIntervals() (int, error) {
 		// weight
 		BodyFat:    ptr.Float(weightResponse[0].LatestWeight.BodyFat),
 		MuscleMass: ptr.Float(weightResponse[0].LatestWeight.MuscleMassInGrams / 1000),
-		Weight:     ptr.Float(weightResponse[0].LatestWeight.WeightInGrams / 1000),
+		// intentionally excluding weight - already synced natively by intervals
+		// Weight:     ptr.Float(weightResponse[0].LatestWeight.WeightInGrams / 1000),
 		// heart
 		RestingHr:        ptr.Int(int(math.Round(dailySummaryResponse[0].HeartRate.RestingValue))),
 		HrvRmssd:         ptr.Float(hrvResponse[0].LastNightAvg),

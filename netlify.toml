@@ -7,6 +7,3 @@
   schedule = "0 5 * * *"
 [functions."garmin"]
   schedule = "0 6 * * *"
-[functions."weekly_digest"]
-  background = true
-  schedule = "0 9 * * 1"
